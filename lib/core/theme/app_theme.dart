@@ -55,6 +55,10 @@ abstract final class AppTheme {
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(Radii.sm),
         ),
+        // Helper and error text wrap instead of being cut off on small
+        // phones (seen on a 720 px wide screen).
+        helperMaxLines: 3,
+        errorMaxLines: 3,
       ),
       navigationBarTheme: NavigationBarThemeData(
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
