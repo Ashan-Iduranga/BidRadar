@@ -37,8 +37,10 @@ class PipelinePage extends ConsumerWidget {
             ],
           ),
         ),
+        // Check the error first: while Riverpod retries a failed stream the
+        // state is "loading with an error", which would otherwise spin.
         body: switch (bids) {
-          AsyncError(:final error) => ErrorState(
+          AsyncValue(:final error?) when !bids.hasValue => ErrorState(
             message: 'Could not load bids: $error',
             onRetry: () => ref.invalidate(bidsProvider),
           ),

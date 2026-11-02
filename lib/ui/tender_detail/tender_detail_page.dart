@@ -43,7 +43,7 @@ class TenderDetailPage extends ConsumerWidget {
         ],
       ),
       body: switch (detail) {
-        AsyncError(:final error) => ErrorState(
+        AsyncValue(:final error?) when !detail.hasValue => ErrorState(
           message: 'Could not read this tender: $error',
           onRetry: () => ref.invalidate(cachedTenderProvider(tenderId)),
         ),

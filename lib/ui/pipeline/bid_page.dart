@@ -24,7 +24,9 @@ class BidPage extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Bid')),
       body: switch (bid) {
-        AsyncError(:final error) => ErrorState(message: '$error'),
+        AsyncValue(:final error?) when !bid.hasValue => ErrorState(
+          message: '$error',
+        ),
         AsyncData(value: null) => EmptyState(
           icon: Icons.view_kanban_outlined,
           title: 'Bid removed',

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../pipeline/pipeline_page.dart' show BidCard;
+import '../pipeline/pipeline_view_model.dart';
 import '../widgets/state_views.dart';
 import 'deadlines_view_model.dart';
 
@@ -15,6 +16,16 @@ class DeadlinesPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final loadError = ref.watch(bidsProvider).error;
+    if (loadError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Deadlines')),
+        body: ErrorState(
+          message: 'Could not load bids: $loadError',
+          onRetry: () => ref.invalidate(bidsProvider),
+        ),
+      );
+    }
     final bids = ref.watch(deadlineBidsProvider);
     final cal = ref.watch(calendarProvider);
     final theme = Theme.of(context);
