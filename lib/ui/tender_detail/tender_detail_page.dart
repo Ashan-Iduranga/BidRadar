@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/geo/countries.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
+import '../widgets/fit_score_badge.dart';
 import '../widgets/state_views.dart';
 import '../widgets/tender_card.dart' show deadlineLabel;
 import '../widgets/verdict_chip.dart';
@@ -54,6 +55,7 @@ class TenderDetailPage extends ConsumerWidget {
         AsyncData(:final value) => _Body(
           tender: value.tender!,
           rules: value.rules,
+          verdict: value.verdict,
         ),
         _ => const Center(child: CircularProgressIndicator()),
       },
@@ -62,9 +64,10 @@ class TenderDetailPage extends ConsumerWidget {
 }
 
 class _Body extends StatelessWidget {
-  const _Body({required this.tender, required this.rules});
+  const _Body({required this.tender, required this.rules, this.verdict});
   final Tender tender;
   final RulesResult? rules;
+  final Verdict? verdict;
 
   @override
   Widget build(BuildContext context) {
@@ -145,26 +148,7 @@ class _Body extends StatelessWidget {
         ),
         _Section(
           title: 'AI verdict',
-          child: Card(
-            child: Padding(
-              padding: const EdgeInsets.all(Space.lg),
-              child: Row(
-                children: [
-                  const VerdictChip(verdict: null),
-                  const SizedBox(width: Space.md),
-                  Expanded(
-                    child: Text(
-                      rules?.passed == false
-                          ? 'Not sent to the AI: the hard rules removed it.'
-                          : 'Not judged yet. The bid agent will read the '
-                                'notice and quote its evidence.',
-                      style: theme.textTheme.bodyMedium,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          child: _VerdictView(tender: t, rules: rules, verdict: verdict),
         ),
         if (t.url != null || t.documentUrls.isNotEmpty)
           _Section(
@@ -209,6 +193,228 @@ class _Body extends StatelessWidget {
         const SnackBar(content: Text('Could not open the link.')),
       );
     }
+  }
+}
+
+class _VerdictView extends ConsumerWidget {
+  const _VerdictView({
+    required this.tender,
+    required this.rules,
+    required this.verdict,
+  });
+
+  final Tender tender;
+  final RulesResult? rules;
+  final Verdict? verdict;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final running = ref.watch(judgeViewModelProvider(tender.id));
+    final v = verdict;
+    final vetoed = rules?.passed == false;
+
+    Future<void> judge() async {
+      final messenger = ScaffoldMessenger.of(context);
+      final err = await ref
+          .read(judgeViewModelProvider(tender.id).notifier)
+          .judge();
+      if (err != null) {
+        messenger.showSnackBar(SnackBar(content: Text(err)));
+      }
+    }
+
+    final button = vetoed || rules == null
+        ? null
+        : FilledButton.tonalIcon(
+            onPressed: running ? null : judge,
+            icon: running
+                ? const SizedBox.square(
+                    dimension: IconSizes.sm,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.auto_awesome_outlined),
+            label: Text(
+              running
+                  ? 'Reading the notice…'
+                  : v == null
+                  ? 'Judge with AI'
+                  : 'Judge again',
+            ),
+          );
+
+    if (v == null || vetoed) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(Space.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  VerdictChip(verdict: vetoed ? VerdictKind.noBid : null),
+                  const SizedBox(width: Space.md),
+                  Expanded(
+                    child: Text(
+                      vetoed
+                          ? 'Not sent to the AI: the hard rules removed it.'
+                          : 'Not judged yet. The bid agent reads the notice '
+                                'and must quote its evidence word for word.',
+                    ),
+                  ),
+                ],
+              ),
+              if (button != null) ...[const SizedBox(height: Space.md), button],
+            ],
+          ),
+        ),
+      );
+    }
+
+    final verified = v.criteria.where((c) => c.quoteVerified).length;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(Space.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                VerdictChip(verdict: v.verdict),
+                const SizedBox(width: Space.md),
+                FitScoreBadge(score: v.fitScore),
+                const SizedBox(width: Space.md),
+                Expanded(
+                  child: Text(
+                    [
+                      'Fit ${v.fitScore}/100',
+                      if (v.confidence != null)
+                        'confidence ${(v.confidence! * 100).round()}%',
+                    ].join(' · '),
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ),
+            if (v.note != null) ...[
+              const SizedBox(height: Space.md),
+              _RuleRow(icon: Icons.info_outline, text: v.note!),
+            ],
+            if (v.criteria.isNotEmpty) ...[
+              const SizedBox(height: Space.md),
+              Text(
+                'Evidence: $verified of ${v.criteria.length} quotes found in '
+                'the notice',
+                style: theme.textTheme.titleSmall,
+              ),
+              const SizedBox(height: Space.sm),
+              for (final c in v.criteria) _CriterionTile(c),
+            ],
+            if (v.missingDocs.isNotEmpty) ...[
+              const SizedBox(height: Space.md),
+              Text('Documents to prepare', style: theme.textTheme.titleSmall),
+              const SizedBox(height: Space.xs),
+              for (final d in v.missingDocs)
+                _RuleRow(icon: Icons.description_outlined, text: d),
+            ],
+            if (v.clarificationQuestion != null &&
+                v.clarificationQuestion!.trim().isNotEmpty) ...[
+              const SizedBox(height: Space.md),
+              Text('Ask the buyer', style: theme.textTheme.titleSmall),
+              const SizedBox(height: Space.xs),
+              _RuleRow(
+                icon: Icons.help_outline,
+                text: v.clarificationQuestion!,
+              ),
+            ],
+            const SizedBox(height: Space.sm),
+            Text(
+              '${v.model} · '
+              '${DateFormat.yMMMd().add_jm().format(v.at.toLocal())}',
+              style: theme.textTheme.bodySmall?.copyWith(color: muted),
+            ),
+            if (button != null) ...[const SizedBox(height: Space.md), button],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One criterion with its quote. Verified quotes get a check; unverified
+/// ones are marked so nobody relies on them.
+class _CriterionTile extends StatelessWidget {
+  const _CriterionTile(this.c);
+  final Criterion c;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final (metIcon, metText) = switch (c.met) {
+      CriterionMet.yes => (Icons.check_circle_outline, 'Met'),
+      CriterionMet.no => (Icons.cancel_outlined, 'Not met'),
+      CriterionMet.unknown => (Icons.help_outline, 'Unknown'),
+    };
+    final quoteColor = c.quoteVerified ? muted : theme.colorScheme.error;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Space.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(metIcon, size: IconSizes.sm),
+              const SizedBox(width: Space.sm),
+              Expanded(
+                child: Text(
+                  '${c.criterion} · $metText',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(left: IconSizes.sm + Space.sm),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '“${c.quote}”',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Icon(
+                      c.quoteVerified
+                          ? Icons.verified_outlined
+                          : Icons.report_outlined,
+                      size: 14,
+                      color: quoteColor,
+                    ),
+                    const SizedBox(width: Space.xs),
+                    Text(
+                      c.quoteVerified
+                          ? 'Quote found in the notice'
+                          : 'Quote NOT found in the notice',
+                      style: theme.textTheme.labelSmall?.copyWith(
+                        color: quoteColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

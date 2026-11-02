@@ -110,6 +110,7 @@ class Verdict {
     required this.at,
     this.confidence,
     this.clarificationQuestion,
+    this.note,
   });
 
   final String id;
@@ -127,6 +128,10 @@ class Verdict {
   final double? confidence;
   final RulesResult rulesResult;
   final VerdictStatus status;
+
+  /// Why the code changed or could not produce the AI's answer, e.g.
+  /// "AI confidence is low (40%)." Shown next to the verdict.
+  final String? note;
 
   /// Model name, or "rules" when the AI was never called.
   final String model;
@@ -148,6 +153,7 @@ class Verdict {
     status: VerdictStatus.fromWire(j['status'] as String),
     model: j['model'] as String,
     at: DateTime.parse(j['at'] as String),
+    note: j['note'] as String?,
   );
 
   Map<String, dynamic> toJson() => {
@@ -164,5 +170,6 @@ class Verdict {
     'status': status.wire,
     'model': model,
     'at': at.toUtc().toIso8601String(),
+    'note': note,
   };
 }

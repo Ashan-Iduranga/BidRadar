@@ -11,6 +11,8 @@ import '../../data/repositories/company_repository.dart';
 import '../../data/repositories/sync_store.dart';
 import '../../data/sources/ted_client.dart';
 import '../../data/sources/worldbank_client.dart';
+import '../agent/bid_agent.dart';
+import '../agent/gemini_model.dart';
 import 'feed_sync.dart';
 
 /// Runs FeedSync every 6 hours with WorkManager, even when the app is
@@ -70,6 +72,8 @@ abstract final class BackgroundSync {
         cache: TenderCache(db),
         log: SyncLog(db),
         store: FirestoreSyncStore(firestore),
+        agent: BidAgent(model: GeminiModel()),
+        verdicts: VerdictCache(db),
       ).run(company: company, profile: profile, background: true);
       Log.info(
         'bgsync',

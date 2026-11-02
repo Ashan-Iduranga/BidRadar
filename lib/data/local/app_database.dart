@@ -39,7 +39,21 @@ class SyncRuns extends Table {
   BoolColumn get background => boolean()();
 }
 
-@DriftDatabase(tables: [CachedTenders, SyncRuns])
+/// The latest AI verdict per company and tender. Reused while the notice
+/// text (hash) is unchanged, so Gemini is not asked twice about the same
+/// notice. Firestore keeps the full append-only history.
+class CachedVerdicts extends Table {
+  TextColumn get companyId => text()();
+  TextColumn get tenderId => text()();
+  TextColumn get textHash => text()();
+  DateTimeColumn get at => dateTime()();
+  TextColumn get json => text()();
+
+  @override
+  Set<Column<Object>> get primaryKey => {companyId, tenderId};
+}
+
+@DriftDatabase(tables: [CachedTenders, SyncRuns, CachedVerdicts])
 class AppDatabase extends _$AppDatabase {
   /// Shared across isolates so the workmanager isolate and the UI use one
   /// sqlite file safely.
@@ -53,13 +67,14 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(syncRuns);
+      if (from < 3) await m.createTable(cachedVerdicts);
     },
   );
 }
@@ -73,6 +88,8 @@ class SyncReport {
     this.matched = 0,
     this.vetoed = 0,
     this.duplicates = 0,
+    this.judged = 0,
+    this.bids = 0,
     this.errors = const [],
     this.background = false,
   });
@@ -89,6 +106,10 @@ class SyncReport {
   /// New tenders vetoed by the rules (recorded as NO_BID).
   final int vetoed;
   final int duplicates;
+
+  /// Tenders the AI judged in this run, and how many it said BID to.
+  final int judged;
+  final int bids;
 
   /// One line per failure, e.g. "World Bank: no connection".
   final List<String> errors;
@@ -237,4 +258,53 @@ class TenderCache {
 
   static Tender _decode(CachedTender row) =>
       Tender.fromJson(jsonDecode(row.json) as Map<String, dynamic>);
+}
+
+/// Local store of the latest AI verdict per tender.
+class VerdictCache {
+  VerdictCache(this._db);
+  final AppDatabase _db;
+
+  Future<void> put(Verdict v, {required String textHash}) => _db
+      .into(_db.cachedVerdicts)
+      .insertOnConflictUpdate(
+        CachedVerdictsCompanion.insert(
+          companyId: v.companyId,
+          tenderId: v.tenderId,
+          textHash: textHash,
+          at: v.at.toUtc(),
+          json: jsonEncode(v.toJson()),
+        ),
+      );
+
+  /// A verdict that can be reused for [tender]: same notice text, and not a
+  /// failed AI call (those are retried on the next sync).
+  Future<Verdict?> reusable(String companyId, Tender tender) async {
+    final row =
+        await (_db.select(_db.cachedVerdicts)..where(
+              (r) =>
+                  r.companyId.equals(companyId) & r.tenderId.equals(tender.id),
+            ))
+            .getSingleOrNull();
+    if (row == null || row.textHash != tender.textHash) return null;
+    final v = _decode(row);
+    return v.status == VerdictStatus.aiUnavailable ? null : v;
+  }
+
+  /// tenderId → latest verdict, for the feed.
+  Stream<Map<String, Verdict>> watchForCompany(String companyId) =>
+      (_db.select(_db.cachedVerdicts)
+            ..where((r) => r.companyId.equals(companyId)))
+          .watch()
+          .map((rows) => {for (final r in rows) r.tenderId: _decode(r)});
+
+  Stream<Verdict?> watchOne(String companyId, String tenderId) =>
+      (_db.select(_db.cachedVerdicts)..where(
+            (r) => r.companyId.equals(companyId) & r.tenderId.equals(tenderId),
+          ))
+          .watchSingleOrNull()
+          .map((r) => r == null ? null : _decode(r));
+
+  static Verdict _decode(CachedVerdict row) =>
+      Verdict.fromJson(jsonDecode(row.json) as Map<String, dynamic>);
 }

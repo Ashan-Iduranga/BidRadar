@@ -22,19 +22,33 @@ final eligibilityRulesProvider = Provider((ref) => const EligibilityRules());
 /// One tender with its hard-rule result, as the feed shows it.
 @immutable
 class FeedItem {
-  const FeedItem(this.tender, this.rules);
+  const FeedItem(this.tender, this.rules, [this.verdict]);
   final Tender tender;
 
   /// Null when there is no profile to check against.
   final RulesResult? rules;
 
-  bool get removed => rules?.passed == false;
-  bool get needsReview => !removed && (rules?.warnings.isNotEmpty ?? false);
+  /// The latest AI verdict, if the agent has judged this tender.
+  final Verdict? verdict;
+
+  /// Removed by a hard rule (always wins) or judged NO_BID.
+  bool get removed =>
+      rules?.passed == false || verdict?.verdict == VerdictKind.noBid;
+
+  bool get isBid => !removed && verdict?.verdict == VerdictKind.bid;
+
+  bool get needsReview =>
+      !removed &&
+      (verdict?.verdict == VerdictKind.review ||
+          (verdict == null && (rules?.warnings.isNotEmpty ?? false)));
 }
 
 enum FeedStatus {
-  /// Passed every hard rule (with or without warnings).
+  /// Not removed by the rules or the AI.
   eligible('Eligible'),
+
+  /// The AI says BID.
+  bid('Bid'),
 
   /// Passed, but something could not be checked.
   review('Needs review'),
@@ -95,13 +109,22 @@ final feedFilterProvider = NotifierProvider<FeedFilterNotifier, FeedFilter>(
   FeedFilterNotifier.new,
 );
 
-/// Rank until Phase 3 adds fit scores: clean passes, then passes with
-/// warnings, then removed; within each, soonest deadline first and unknown
-/// deadlines last.
+/// Ranking: BID, then not yet judged, then REVIEW, then removed. Within a
+/// group, higher fit score first, then soonest deadline; unknown deadlines
+/// last.
 int compareFeedItems(FeedItem a, FeedItem b) {
-  int group(FeedItem i) => i.removed ? 2 : (i.needsReview ? 1 : 0);
+  int group(FeedItem i) => i.removed
+      ? 3
+      : i.isBid
+      ? 0
+      : i.needsReview
+      ? 2
+      : 1;
   final g = group(a).compareTo(group(b));
   if (g != 0) return g;
+  final fa = a.verdict?.fitScore ?? -1;
+  final fb = b.verdict?.fitScore ?? -1;
+  if (fa != fb) return fb.compareTo(fa);
   final da = a.tender.deadline;
   final db = b.tender.deadline;
   if (da == null && db == null) return 0;
@@ -118,6 +141,7 @@ List<FeedItem> applyFeedFilter(List<FeedItem> items, FeedFilter f) {
     }
     final statusOk = switch (f.status) {
       FeedStatus.eligible => !i.removed,
+      FeedStatus.bid => i.isBid,
       FeedStatus.review => i.needsReview,
       FeedStatus.removed => i.removed,
       FeedStatus.all => true,
@@ -133,9 +157,17 @@ List<FeedItem> applyFeedFilter(List<FeedItem> items, FeedFilter f) {
   return out;
 }
 
-/// Every cached tender with live rule results for the current profile.
+/// tenderId → latest AI verdict for the current company.
+final verdictsProvider = StreamProvider<Map<String, Verdict>>((ref) {
+  final companyId = ref.watch(currentCompanyIdProvider).value;
+  if (companyId == null) return Stream.value(const {});
+  return ref.watch(verdictCacheProvider).watchForCompany(companyId);
+});
+
+/// Every cached tender with live rule results and its AI verdict.
 final feedItemsProvider = Provider<AsyncValue<List<FeedItem>>>((ref) {
   final tenders = ref.watch(cachedTendersProvider);
+  final verdicts = ref.watch(verdictsProvider).value ?? const {};
   final company = ref.watch(currentCompanyProvider).value;
   final profile = ref.watch(currentProfileProvider).value;
   final rules = ref.watch(eligibilityRulesProvider);
@@ -153,6 +185,7 @@ final feedItemsProvider = Provider<AsyncValue<List<FeedItem>>>((ref) {
                   tender: t,
                   now: now,
                 ),
+          verdicts[t.id],
         ),
     ],
   );
@@ -213,11 +246,13 @@ final syncViewModelProvider = NotifierProvider<SyncViewModel, SyncState>(
   SyncViewModel.new,
 );
 
-/// "12 new · 9 match · 3 removed by rules · World Bank: no connection".
+/// "12 new · 9 match · 3 removed by rules · 5 judged by AI (2 BID) ·
+/// World Bank: no connection".
 String syncSummary(SyncReport r) => [
   r.added == 0 ? 'No new tenders' : '${r.added} new',
   if (r.matched > 0) '${r.matched} match',
   if (r.vetoed > 0) '${r.vetoed} removed by rules',
+  if (r.judged > 0) '${r.judged} judged by AI (${r.bids} BID)',
   ...r.errors,
 ].join(' · ');
 

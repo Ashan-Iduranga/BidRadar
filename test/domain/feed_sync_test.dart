@@ -5,6 +5,8 @@ import 'package:bidradar/data/local/app_database.dart';
 import 'package:bidradar/data/models/models.dart';
 import 'package:bidradar/data/repositories/sync_store.dart';
 import 'package:bidradar/data/sources/tender_source.dart';
+import 'package:bidradar/domain/agent/ai_model.dart';
+import 'package:bidradar/domain/agent/bid_agent.dart';
 import 'package:bidradar/domain/sync/feed_sync.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -193,4 +195,87 @@ void main() {
     expect(last.matched, 2);
     expect(last.background, isTrue);
   });
+
+  group('with the AI agent', () {
+    late CountingModel model;
+    late VerdictCache verdicts;
+
+    FeedSync withAgent({int max = 5}) => FeedSync(
+      sources: [ted, wb],
+      cache: cache,
+      log: log,
+      store: store,
+      clock: () => now,
+      agent: BidAgent(model: model, clock: () => now, sleep: (_) async {}),
+      verdicts: verdicts,
+      maxAiPerSync: max,
+    );
+
+    setUp(() {
+      model = CountingModel();
+      verdicts = VerdictCache(db);
+    });
+
+    test('judges only eligible tenders, up to the per-sync limit', () async {
+      final r = await withAgent(max: 1).run(company: company, profile: profile);
+      expect(r.judged, 1);
+      expect(model.calls, 1);
+      // The rest are judged on the next sync.
+      final r2 = await withAgent().run(company: company, profile: profile);
+      expect(r2.judged, 1);
+      expect(model.calls, 2, reason: '2 eligible tenders in total');
+    });
+
+    test('reuses a verdict while the notice text is unchanged', () async {
+      await withAgent().run(company: company, profile: profile);
+      final calls = model.calls;
+      final r = await withAgent().run(company: company, profile: profile);
+      expect(r.judged, 0);
+      expect(model.calls, calls);
+    });
+
+    test('AI verdicts go to the audit store', () async {
+      await withAgent().run(company: company, profile: profile);
+      expect(
+        store.verdicts.where((v) => v.status != VerdictStatus.rulesVeto),
+        hasLength(2),
+      );
+    });
+
+    test('an unavailable AI stops the loop and is reported', () async {
+      model.fail = true;
+      final r = await withAgent().run(company: company, profile: profile);
+      expect(r.judged, 1, reason: 'stops after the first failure');
+      expect(r.errors.single, startsWith('AI: AI unavailable'));
+      // Failed verdicts are not reused: the next sync tries again.
+      model.fail = false;
+      final r2 = await withAgent().run(company: company, profile: profile);
+      expect(r2.judged, 2);
+    });
+  });
+}
+
+class CountingModel implements AiModel {
+  int calls = 0;
+  bool fail = false;
+
+  @override
+  String get modelName => 'counting';
+
+  @override
+  Future<AiVerdictPayload> judgeTender({
+    required Company company,
+    required CompanyProfile profile,
+    required Tender tender,
+  }) async {
+    calls++;
+    if (fail) throw Exception('quota');
+    return const AiVerdictPayload(
+      verdict: VerdictKind.noBid,
+      fitScore: 20,
+      confidence: 0.9,
+      criteria: [],
+      missingDocs: [],
+    );
+  }
 }
