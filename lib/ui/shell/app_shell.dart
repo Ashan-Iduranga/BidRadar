@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/firebase/firebase_bootstrap.dart';
+import '../deadlines/deadlines_view_model.dart';
 
 /// Bottom navigation for the 5 top-level pages. Tender detail, Scan and
 /// Approvals are pushed on top of the shell.
@@ -42,6 +43,8 @@ class AppShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final firebaseReady = ref.watch(firebaseReadyProvider);
+    // Deadline reminders follow the pipeline while the app is open.
+    if (firebaseReady) ref.watch(reminderSyncProvider);
     return Scaffold(
       body: Column(
         children: [
