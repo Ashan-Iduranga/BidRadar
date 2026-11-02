@@ -38,15 +38,34 @@ final Schema bidVerdictSchema = Schema.object(
   optionalProperties: ['clarificationQuestion'],
 );
 
-/// The Gemini response schema for reading a scanned notice.
+/// The Gemini response schema for reading a scanned notice. Must stay in
+/// sync with `ScannedNotice.fromJson`.
 final Schema scannedNoticeSchema = Schema.object(
   properties: {
-    'title': Schema.string(),
-    'buyer': Schema.string(),
+    'title': Schema.string(description: 'What is being bought, in English.'),
+    'buyer': Schema.string(description: 'The buying organisation.'),
     'deadline': Schema.string(
-      description: 'ISO 8601 date-time, or empty if not stated.',
+      description:
+          'Submission deadline as ISO 8601 local date-time without a time '
+          'zone, e.g. 2026-11-28T14:00:00. Empty if not stated.',
     ),
-    'country': Schema.string(description: 'ISO 3166-1 alpha-3 code.'),
-    'requirements': Schema.array(items: Schema.string()),
+    'country': Schema.string(
+      description: 'ISO 3166-1 alpha-3 code of the buyer country, or empty.',
+    ),
+    'requirements': Schema.array(
+      items: Schema.string(),
+      description: 'Eligibility requirements, copied as printed.',
+    ),
+    'minTurnover': Schema.number(
+      description: 'Minimum annual turnover required, if stated.',
+    ),
+    'currency': Schema.string(
+      description: 'ISO 4217 currency of minTurnover, e.g. LKR.',
+    ),
+    'cpvCodes': Schema.array(
+      items: Schema.string(),
+      description: '8-digit CPV codes ONLY if printed on the notice.',
+    ),
   },
+  optionalProperties: ['minTurnover', 'currency', 'cpvCodes'],
 );
