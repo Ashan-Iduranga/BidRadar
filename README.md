@@ -15,15 +15,35 @@ Plans: `BidRadar_Proposal.pdf` and `BidRadar_Architecture_and_Implementation_Pla
   - Company page saved to Firestore.
   - Live TED and World Bank clients, the drift cache with dedup, and `EligibilityRules`.
 
-- Phase 2 (automation core and feed): done on branch `phase-2`.
+- Phase 2 (automation core and feed): done.
   - `FeedSync` (`lib/domain/sync/feed_sync.dart`) runs the pipeline: fetch, dedup, hard rules, cache, Firestore. Vetoed tenders get a `rules_veto` NO_BID audit verdict and never reach the AI.
   - Background sync every 6 hours with WorkManager, with the notification "N new tenders match". "Sync now" and pull to refresh run the same code.
   - Feed: status, source and sector filters, ranking, an "Updated … ago" line, and offline reading.
   - Tender detail: facts, rule results, the notice text, Open notice, and Share.
 
+- Phase 3 (AI agent and workflow): done on branch `phase-3`.
+  - **Bid agent:** Gemini (`gemini-3.5-flash-lite`, free tier) through Firebase AI Logic, protected by App Check.
+    - Every quote must appear word for word in the notice: one retry, then REVIEW.
+    - Guards run after the AI: a rules veto forces NO_BID; low confidence or fit, unmet or missing evidence, and rule warnings force REVIEW.
+    - Each call has a 20 s timeout and 2 retries, then "AI unavailable".
+    - Verdicts are cached by notice hash, and each sync judges at most 5 tenders.
+  - **Pipeline and Approvals:** Watching, Preparing, Submitted, Won and Lost.
+    - Only the owner approves; this is enforced in the Firestore rules.
+    - Approval builds the document checklist from the verdict.
+    - Lost bids record their reasons.
+  - **Deadlines:** reminders 7, 3 and 1 days before each deadline at 09:00, and a Monday digest.
+  - **Scan:** camera, then ML Kit OCR on the device, then Gemini; the user confirms the buyer and deadline.
+  - **Insights:** win rate, AI agreement, verdict mix, the fit-score chart, loss reasons, and best buyers and sectors. Gemini suggests profile changes, and the owner accepts them.
+
+Model note: `gemini-3.8-flash` is also free, but it did not answer within 90 s on this project, so the app uses 3.5 Flash-Lite. The model name lives in `GeminiModel.defaultModel`.
+
 ### Testing background sync
 
 Android won't run periodic WorkManager jobs early, even when they are forced through `adb`. In debug builds, the Feed's overflow menu has **Run background sync (debug)**. It queues the same task once, in the background isolate.
+
+### Testing Scan on an emulator
+
+The emulator camera can't see paper. In debug builds the Scan page has **Try a sample notice (debug)**, which runs the real OCR and AI on `assets/samples/sample_notice.png`, a synthetic notice.
 
 Source notes found while building Phase 1:
 - TED's `ACTIVE` scope still returns notices that closed years ago, oldest first. The client filters on open deadlines and sorts newest first.

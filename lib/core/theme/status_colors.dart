@@ -16,6 +16,9 @@ class StatusColors extends ThemeExtension<StatusColors> {
     required this.onReview,
     required this.neutral,
     required this.onNeutral,
+    required this.bidMark,
+    required this.reviewMark,
+    required this.noBidMark,
   });
 
   final Color bid;
@@ -27,6 +30,14 @@ class StatusColors extends ThemeExtension<StatusColors> {
   final Color neutral;
   final Color onNeutral;
 
+  /// Data-mark colours for charts (e.g. the verdict mix bar), checked with
+  /// the dataviz palette validator against each mode's surface:
+  /// light passes every check; dark passes with deutan ΔE 6.9, which is
+  /// allowed because the marks always have gaps, icons and labels.
+  final Color bidMark;
+  final Color reviewMark;
+  final Color noBidMark;
+
   static const light = StatusColors(
     bid: Color(0xFFD5EFE4),
     onBid: Color(0xFF0E4F3A),
@@ -36,6 +47,9 @@ class StatusColors extends ThemeExtension<StatusColors> {
     onReview: Color(0xFF6B4A00),
     neutral: Color(0xFFE4E9E6),
     onNeutral: Color(0xFF34464A),
+    bidMark: Color(0xFF1F8A70),
+    reviewMark: Color(0xFFE0A526),
+    noBidMark: Color(0xFFB3261E),
   );
 
   static const dark = StatusColors(
@@ -47,6 +61,9 @@ class StatusColors extends ThemeExtension<StatusColors> {
     onReview: Color(0xFFF7D77E),
     neutral: Color(0xFF2B3437),
     onNeutral: Color(0xFFC3CDCF),
+    bidMark: Color(0xFF289474),
+    reviewMark: Color(0xFFB98A28),
+    noBidMark: Color(0xFFD24B42),
   );
 
   @override
@@ -59,6 +76,9 @@ class StatusColors extends ThemeExtension<StatusColors> {
     Color? onReview,
     Color? neutral,
     Color? onNeutral,
+    Color? bidMark,
+    Color? reviewMark,
+    Color? noBidMark,
   }) {
     return StatusColors(
       bid: bid ?? this.bid,
@@ -69,6 +89,9 @@ class StatusColors extends ThemeExtension<StatusColors> {
       onReview: onReview ?? this.onReview,
       neutral: neutral ?? this.neutral,
       onNeutral: onNeutral ?? this.onNeutral,
+      bidMark: bidMark ?? this.bidMark,
+      reviewMark: reviewMark ?? this.reviewMark,
+      noBidMark: noBidMark ?? this.noBidMark,
     );
   }
 
@@ -84,6 +107,9 @@ class StatusColors extends ThemeExtension<StatusColors> {
       onReview: Color.lerp(onReview, other.onReview, t)!,
       neutral: Color.lerp(neutral, other.neutral, t)!,
       onNeutral: Color.lerp(onNeutral, other.onNeutral, t)!,
+      bidMark: Color.lerp(bidMark, other.bidMark, t)!,
+      reviewMark: Color.lerp(reviewMark, other.reviewMark, t)!,
+      noBidMark: Color.lerp(noBidMark, other.noBidMark, t)!,
     );
   }
 }

@@ -40,7 +40,7 @@ void main() {
     await pumpApp(tester);
 
     for (final (tab, title) in [
-      ('Pipeline', 'No bids in progress'),
+      ('Pipeline', 'No bids watching'),
       ('Deadlines', 'No upcoming deadlines'),
       ('Insights', 'No results yet'),
       ('Company', 'Firebase is not configured'),

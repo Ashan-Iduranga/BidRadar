@@ -104,3 +104,15 @@ enum VetoRule {
   final String wire;
   static VetoRule fromWire(String w) => _byWire(values, w, (v) => v.wire);
 }
+
+/// Where a bid is in the owner-approval step before preparing it.
+enum ApprovalState {
+  none('none'),
+  pending('pending'),
+  approved('approved'),
+  rejected('rejected');
+
+  const ApprovalState(this.wire);
+  final String wire;
+  static ApprovalState fromWire(String w) => _byWire(values, w, (v) => v.wire);
+}

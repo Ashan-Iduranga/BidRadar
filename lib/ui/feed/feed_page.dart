@@ -202,6 +202,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                 return TenderCard(
                   tender: item.tender,
                   rules: item.rules,
+                  verdict: item.verdict,
                   onTap: () => context.push(Routes.tender(item.tender.id)),
                 );
               },

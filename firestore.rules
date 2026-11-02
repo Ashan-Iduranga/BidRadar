@@ -95,8 +95,16 @@ service cloud.firestore {
     match /bids/{bidId} {
       allow read: if isMember(resource.data.companyId);
       allow create: if isMember(request.resource.data.companyId);
+      // Members update bids, but only the owner approves: a bid manager may
+      // only ask (approval -> 'pending') and cannot leave 'watching' until
+      // the owner has approved.
       allow update: if isMember(resource.data.companyId)
-        && request.resource.data.companyId == resource.data.companyId;
+        && request.resource.data.companyId == resource.data.companyId
+        && (isOwner(resource.data.companyId)
+          || ((request.resource.data.approval == resource.data.approval
+                || request.resource.data.approval == 'pending')
+            && (resource.data.stage != 'watching'
+                || request.resource.data.stage == 'watching')));
       allow delete: if isOwner(resource.data.companyId);
     }
 

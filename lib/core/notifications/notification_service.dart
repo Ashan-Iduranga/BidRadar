@@ -1,5 +1,8 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
 
+import '../../domain/reminders/reminder_planner.dart';
 import '../logging/log.dart';
 
 /// Local notifications. Used by the background sync (any isolate) and,
@@ -12,6 +15,14 @@ class NotificationService {
   bool _ready = false;
 
   static const newTendersId = 1001;
+  static bool _tzReady = false;
+  static const _deadlineChannel = AndroidNotificationDetails(
+    'deadlines',
+    'Deadline reminders',
+    channelDescription: 'Reminders 7, 3 and 1 days before bid deadlines.',
+    importance: Importance.high,
+    priority: Priority.high,
+  );
   static const _channel = AndroidNotificationDetails(
     'new_tenders',
     'New tenders',
@@ -54,6 +65,40 @@ class NotificationService {
       );
     } on Object catch (e) {
       Log.warn('notify', 'could not show notification: $e');
+    }
+  }
+
+  /// Replaces every scheduled reminder with [planned]. Times are scheduled
+  /// as absolute UTC instants, so the device time zone database is not
+  /// needed. Inexact scheduling avoids the exact-alarm permission; Android
+  /// may shift a reminder by some minutes.
+  Future<int> scheduleReminders(List<PlannedReminder> planned) async {
+    try {
+      await init();
+      if (!_tzReady) {
+        tzdata.initializeTimeZones();
+        _tzReady = true;
+      }
+      final pending = await _plugin.pendingNotificationRequests();
+      for (final p in pending) {
+        if (p.id >= ReminderPlanner.digestId) await _plugin.cancel(id: p.id);
+      }
+      for (final r in planned) {
+        await _plugin.zonedSchedule(
+          id: r.id,
+          title: r.title,
+          body: r.body,
+          scheduledDate: tz.TZDateTime.from(r.at.toUtc(), tz.UTC),
+          notificationDetails: const NotificationDetails(
+            android: _deadlineChannel,
+          ),
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        );
+      }
+      return planned.length;
+    } on Object catch (e) {
+      Log.warn('notify', 'could not schedule reminders: $e');
+      return 0;
     }
   }
 }

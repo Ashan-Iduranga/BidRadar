@@ -16,6 +16,13 @@ class BidTask {
   final String? assigneeUid;
   final bool done;
 
+  BidTask copyWith({bool? done}) => BidTask(
+    id: id,
+    title: title,
+    assigneeUid: assigneeUid,
+    done: done ?? this.done,
+  );
+
   factory BidTask.fromJson(Map<String, dynamic> j) => BidTask(
     id: j['id'] as String,
     title: j['title'] as String,
@@ -31,7 +38,9 @@ class BidTask {
   };
 }
 
-/// `bids/{id}`: pipeline state for one tender.
+/// `bids/{companyId}_{tenderId}`: pipeline state for one tender. Key tender
+/// facts are copied in, so the pipeline and deadlines work on every team
+/// member's phone even when the tender is not in their local cache.
 @immutable
 class Bid {
   const Bid({
@@ -41,20 +50,77 @@ class Bid {
     required this.stage,
     required this.ownerUid,
     required this.updatedAt,
+    required this.title,
+    required this.buyer,
+    this.deadline,
+    this.verdict,
+    this.fitScore,
+    this.approval = ApprovalState.none,
+    this.approvalNote = '',
+    this.requestedBy,
     this.tasks = const [],
     this.lossReasons = const [],
   });
+
+  static String idFor(String companyId, String tenderId) =>
+      '${companyId}_$tenderId';
 
   final String id;
   final String tenderId;
   final String companyId;
   final BidStage stage;
   final String ownerUid;
+  final String title;
+  final String buyer;
+  final DateTime? deadline;
+
+  /// The AI verdict when the bid was created or last refreshed.
+  final VerdictKind? verdict;
+  final int? fitScore;
+
+  final ApprovalState approval;
+
+  /// The owner's note on the last decision.
+  final String approvalNote;
+
+  /// Who asked the owner for approval.
+  final String? requestedBy;
   final List<BidTask> tasks;
 
   /// Filled when [stage] is [BidStage.lost]; feeds Insights.
   final List<String> lossReasons;
   final DateTime updatedAt;
+
+  int get tasksDone => tasks.where((t) => t.done).length;
+
+  Bid copyWith({
+    BidStage? stage,
+    ApprovalState? approval,
+    String? approvalNote,
+    String? Function()? requestedBy,
+    List<BidTask>? tasks,
+    List<String>? lossReasons,
+    VerdictKind? verdict,
+    int? fitScore,
+    required DateTime updatedAt,
+  }) => Bid(
+    id: id,
+    tenderId: tenderId,
+    companyId: companyId,
+    stage: stage ?? this.stage,
+    ownerUid: ownerUid,
+    title: title,
+    buyer: buyer,
+    deadline: deadline,
+    verdict: verdict ?? this.verdict,
+    fitScore: fitScore ?? this.fitScore,
+    approval: approval ?? this.approval,
+    approvalNote: approvalNote ?? this.approvalNote,
+    requestedBy: requestedBy == null ? this.requestedBy : requestedBy(),
+    tasks: tasks ?? this.tasks,
+    lossReasons: lossReasons ?? this.lossReasons,
+    updatedAt: updatedAt,
+  );
 
   factory Bid.fromJson(Map<String, dynamic> j) => Bid(
     id: j['id'] as String,
@@ -62,6 +128,18 @@ class Bid {
     companyId: j['companyId'] as String,
     stage: BidStage.fromWire(j['stage'] as String),
     ownerUid: j['ownerUid'] as String,
+    title: j['title'] as String? ?? 'Untitled tender',
+    buyer: j['buyer'] as String? ?? '',
+    deadline: j['deadline'] == null
+        ? null
+        : DateTime.parse(j['deadline'] as String),
+    verdict: j['verdict'] == null
+        ? null
+        : VerdictKind.fromWire(j['verdict'] as String),
+    fitScore: j['fitScore'] as int?,
+    approval: ApprovalState.fromWire(j['approval'] as String? ?? 'none'),
+    approvalNote: j['approvalNote'] as String? ?? '',
+    requestedBy: j['requestedBy'] as String?,
     tasks: (j['tasks'] as List? ?? const [])
         .map((e) => BidTask.fromJson(e as Map<String, dynamic>))
         .toList(),
@@ -75,6 +153,14 @@ class Bid {
     'companyId': companyId,
     'stage': stage.wire,
     'ownerUid': ownerUid,
+    'title': title,
+    'buyer': buyer,
+    'deadline': deadline?.toUtc().toIso8601String(),
+    'verdict': verdict?.wire,
+    'fitScore': fitScore,
+    'approval': approval.wire,
+    'approvalNote': approvalNote,
+    'requestedBy': requestedBy,
     'tasks': tasks.map((e) => e.toJson()).toList(),
     'lossReasons': lossReasons,
     'updatedAt': updatedAt.toUtc().toIso8601String(),

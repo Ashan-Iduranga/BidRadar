@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/net/resilient_http.dart';
 import '../core/notifications/notification_service.dart';
+import '../domain/agent/ai_model.dart';
+import '../domain/agent/bid_agent.dart';
+import '../domain/agent/gemini_model.dart';
 import '../domain/sync/feed_sync.dart';
 import 'local/app_database.dart';
+import 'repositories/bid_repository.dart';
 import 'repositories/company_repository.dart';
 import 'repositories/sync_store.dart';
 import 'sources/ted_client.dart';
@@ -54,15 +58,32 @@ final syncStoreProvider = Provider<SyncStore>(
   (ref) => FirestoreSyncStore(ref.watch(firestoreProvider)),
 );
 
+final verdictCacheProvider = Provider<VerdictCache>(
+  (ref) => VerdictCache(ref.watch(appDatabaseProvider)),
+);
+
+/// The swappable model (architecture doc §20). Tests override this.
+final aiModelProvider = Provider<AiModel>((ref) => GeminiModel());
+
+final bidAgentProvider = Provider<BidAgent>(
+  (ref) => BidAgent(model: ref.watch(aiModelProvider)),
+);
+
 final feedSyncProvider = Provider<FeedSync>(
   (ref) => FeedSync(
     sources: ref.watch(tenderSourcesProvider),
     cache: ref.watch(tenderCacheProvider),
     log: ref.watch(syncLogProvider),
     store: ref.watch(syncStoreProvider),
+    agent: ref.watch(bidAgentProvider),
+    verdicts: ref.watch(verdictCacheProvider),
   ),
 );
 
 final notifierProvider = Provider<NotificationService>(
   (ref) => NotificationService(),
+);
+
+final bidRepositoryProvider = Provider<BidRepository>(
+  (ref) => FirestoreBidRepository(ref.watch(firestoreProvider)),
 );

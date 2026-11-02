@@ -903,11 +903,372 @@ class SyncRunsCompanion extends UpdateCompanion<SyncRun> {
   }
 }
 
+class $CachedVerdictsTable extends CachedVerdicts
+    with TableInfo<$CachedVerdictsTable, CachedVerdict> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $CachedVerdictsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _companyIdMeta = const VerificationMeta(
+    'companyId',
+  );
+  @override
+  late final GeneratedColumn<String> companyId = GeneratedColumn<String>(
+    'company_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _tenderIdMeta = const VerificationMeta(
+    'tenderId',
+  );
+  @override
+  late final GeneratedColumn<String> tenderId = GeneratedColumn<String>(
+    'tender_id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _textHashMeta = const VerificationMeta(
+    'textHash',
+  );
+  @override
+  late final GeneratedColumn<String> textHash = GeneratedColumn<String>(
+    'text_hash',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _atMeta = const VerificationMeta('at');
+  @override
+  late final GeneratedColumn<DateTime> at = GeneratedColumn<DateTime>(
+    'at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _jsonMeta = const VerificationMeta('json');
+  @override
+  late final GeneratedColumn<String> json = GeneratedColumn<String>(
+    'json',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    companyId,
+    tenderId,
+    textHash,
+    at,
+    json,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'cached_verdicts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<CachedVerdict> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('company_id')) {
+      context.handle(
+        _companyIdMeta,
+        companyId.isAcceptableOrUnknown(data['company_id']!, _companyIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_companyIdMeta);
+    }
+    if (data.containsKey('tender_id')) {
+      context.handle(
+        _tenderIdMeta,
+        tenderId.isAcceptableOrUnknown(data['tender_id']!, _tenderIdMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_tenderIdMeta);
+    }
+    if (data.containsKey('text_hash')) {
+      context.handle(
+        _textHashMeta,
+        textHash.isAcceptableOrUnknown(data['text_hash']!, _textHashMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_textHashMeta);
+    }
+    if (data.containsKey('at')) {
+      context.handle(_atMeta, at.isAcceptableOrUnknown(data['at']!, _atMeta));
+    } else if (isInserting) {
+      context.missing(_atMeta);
+    }
+    if (data.containsKey('json')) {
+      context.handle(
+        _jsonMeta,
+        json.isAcceptableOrUnknown(data['json']!, _jsonMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_jsonMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {companyId, tenderId};
+  @override
+  CachedVerdict map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return CachedVerdict(
+      companyId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}company_id'],
+      )!,
+      tenderId: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}tender_id'],
+      )!,
+      textHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}text_hash'],
+      )!,
+      at: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}at'],
+      )!,
+      json: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}json'],
+      )!,
+    );
+  }
+
+  @override
+  $CachedVerdictsTable createAlias(String alias) {
+    return $CachedVerdictsTable(attachedDatabase, alias);
+  }
+}
+
+class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
+  final String companyId;
+  final String tenderId;
+  final String textHash;
+  final DateTime at;
+  final String json;
+  const CachedVerdict({
+    required this.companyId,
+    required this.tenderId,
+    required this.textHash,
+    required this.at,
+    required this.json,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['company_id'] = Variable<String>(companyId);
+    map['tender_id'] = Variable<String>(tenderId);
+    map['text_hash'] = Variable<String>(textHash);
+    map['at'] = Variable<DateTime>(at);
+    map['json'] = Variable<String>(json);
+    return map;
+  }
+
+  CachedVerdictsCompanion toCompanion(bool nullToAbsent) {
+    return CachedVerdictsCompanion(
+      companyId: Value(companyId),
+      tenderId: Value(tenderId),
+      textHash: Value(textHash),
+      at: Value(at),
+      json: Value(json),
+    );
+  }
+
+  factory CachedVerdict.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return CachedVerdict(
+      companyId: serializer.fromJson<String>(json['companyId']),
+      tenderId: serializer.fromJson<String>(json['tenderId']),
+      textHash: serializer.fromJson<String>(json['textHash']),
+      at: serializer.fromJson<DateTime>(json['at']),
+      json: serializer.fromJson<String>(json['json']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'companyId': serializer.toJson<String>(companyId),
+      'tenderId': serializer.toJson<String>(tenderId),
+      'textHash': serializer.toJson<String>(textHash),
+      'at': serializer.toJson<DateTime>(at),
+      'json': serializer.toJson<String>(json),
+    };
+  }
+
+  CachedVerdict copyWith({
+    String? companyId,
+    String? tenderId,
+    String? textHash,
+    DateTime? at,
+    String? json,
+  }) => CachedVerdict(
+    companyId: companyId ?? this.companyId,
+    tenderId: tenderId ?? this.tenderId,
+    textHash: textHash ?? this.textHash,
+    at: at ?? this.at,
+    json: json ?? this.json,
+  );
+  CachedVerdict copyWithCompanion(CachedVerdictsCompanion data) {
+    return CachedVerdict(
+      companyId: data.companyId.present ? data.companyId.value : this.companyId,
+      tenderId: data.tenderId.present ? data.tenderId.value : this.tenderId,
+      textHash: data.textHash.present ? data.textHash.value : this.textHash,
+      at: data.at.present ? data.at.value : this.at,
+      json: data.json.present ? data.json.value : this.json,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedVerdict(')
+          ..write('companyId: $companyId, ')
+          ..write('tenderId: $tenderId, ')
+          ..write('textHash: $textHash, ')
+          ..write('at: $at, ')
+          ..write('json: $json')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(companyId, tenderId, textHash, at, json);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is CachedVerdict &&
+          other.companyId == this.companyId &&
+          other.tenderId == this.tenderId &&
+          other.textHash == this.textHash &&
+          other.at == this.at &&
+          other.json == this.json);
+}
+
+class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
+  final Value<String> companyId;
+  final Value<String> tenderId;
+  final Value<String> textHash;
+  final Value<DateTime> at;
+  final Value<String> json;
+  final Value<int> rowid;
+  const CachedVerdictsCompanion({
+    this.companyId = const Value.absent(),
+    this.tenderId = const Value.absent(),
+    this.textHash = const Value.absent(),
+    this.at = const Value.absent(),
+    this.json = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  CachedVerdictsCompanion.insert({
+    required String companyId,
+    required String tenderId,
+    required String textHash,
+    required DateTime at,
+    required String json,
+    this.rowid = const Value.absent(),
+  }) : companyId = Value(companyId),
+       tenderId = Value(tenderId),
+       textHash = Value(textHash),
+       at = Value(at),
+       json = Value(json);
+  static Insertable<CachedVerdict> custom({
+    Expression<String>? companyId,
+    Expression<String>? tenderId,
+    Expression<String>? textHash,
+    Expression<DateTime>? at,
+    Expression<String>? json,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (companyId != null) 'company_id': companyId,
+      if (tenderId != null) 'tender_id': tenderId,
+      if (textHash != null) 'text_hash': textHash,
+      if (at != null) 'at': at,
+      if (json != null) 'json': json,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  CachedVerdictsCompanion copyWith({
+    Value<String>? companyId,
+    Value<String>? tenderId,
+    Value<String>? textHash,
+    Value<DateTime>? at,
+    Value<String>? json,
+    Value<int>? rowid,
+  }) {
+    return CachedVerdictsCompanion(
+      companyId: companyId ?? this.companyId,
+      tenderId: tenderId ?? this.tenderId,
+      textHash: textHash ?? this.textHash,
+      at: at ?? this.at,
+      json: json ?? this.json,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (companyId.present) {
+      map['company_id'] = Variable<String>(companyId.value);
+    }
+    if (tenderId.present) {
+      map['tender_id'] = Variable<String>(tenderId.value);
+    }
+    if (textHash.present) {
+      map['text_hash'] = Variable<String>(textHash.value);
+    }
+    if (at.present) {
+      map['at'] = Variable<DateTime>(at.value);
+    }
+    if (json.present) {
+      map['json'] = Variable<String>(json.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('CachedVerdictsCompanion(')
+          ..write('companyId: $companyId, ')
+          ..write('tenderId: $tenderId, ')
+          ..write('textHash: $textHash, ')
+          ..write('at: $at, ')
+          ..write('json: $json, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $CachedTendersTable cachedTenders = $CachedTendersTable(this);
   late final $SyncRunsTable syncRuns = $SyncRunsTable(this);
+  late final $CachedVerdictsTable cachedVerdicts = $CachedVerdictsTable(this);
   late final Index idxCachedTendersHash = Index(
     'idx_cached_tenders_hash',
     'CREATE INDEX idx_cached_tenders_hash ON cached_tenders (text_hash)',
@@ -923,6 +1284,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     cachedTenders,
     syncRuns,
+    cachedVerdicts,
     idxCachedTendersHash,
     idxCachedTendersDeadline,
   ];
@@ -1410,6 +1772,217 @@ typedef $$SyncRunsTableProcessedTableManager =
       SyncRun,
       PrefetchHooks Function()
     >;
+typedef $$CachedVerdictsTableCreateCompanionBuilder =
+    CachedVerdictsCompanion Function({
+      required String companyId,
+      required String tenderId,
+      required String textHash,
+      required DateTime at,
+      required String json,
+      Value<int> rowid,
+    });
+typedef $$CachedVerdictsTableUpdateCompanionBuilder =
+    CachedVerdictsCompanion Function({
+      Value<String> companyId,
+      Value<String> tenderId,
+      Value<String> textHash,
+      Value<DateTime> at,
+      Value<String> json,
+      Value<int> rowid,
+    });
+
+class $$CachedVerdictsTableFilterComposer
+    extends Composer<_$AppDatabase, $CachedVerdictsTable> {
+  $$CachedVerdictsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get companyId => $composableBuilder(
+    column: $table.companyId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get tenderId => $composableBuilder(
+    column: $table.tenderId,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get textHash => $composableBuilder(
+    column: $table.textHash,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$CachedVerdictsTableOrderingComposer
+    extends Composer<_$AppDatabase, $CachedVerdictsTable> {
+  $$CachedVerdictsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get companyId => $composableBuilder(
+    column: $table.companyId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get tenderId => $composableBuilder(
+    column: $table.tenderId,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get textHash => $composableBuilder(
+    column: $table.textHash,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get at => $composableBuilder(
+    column: $table.at,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get json => $composableBuilder(
+    column: $table.json,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$CachedVerdictsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $CachedVerdictsTable> {
+  $$CachedVerdictsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get companyId =>
+      $composableBuilder(column: $table.companyId, builder: (column) => column);
+
+  GeneratedColumn<String> get tenderId =>
+      $composableBuilder(column: $table.tenderId, builder: (column) => column);
+
+  GeneratedColumn<String> get textHash =>
+      $composableBuilder(column: $table.textHash, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get at =>
+      $composableBuilder(column: $table.at, builder: (column) => column);
+
+  GeneratedColumn<String> get json =>
+      $composableBuilder(column: $table.json, builder: (column) => column);
+}
+
+class $$CachedVerdictsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $CachedVerdictsTable,
+          CachedVerdict,
+          $$CachedVerdictsTableFilterComposer,
+          $$CachedVerdictsTableOrderingComposer,
+          $$CachedVerdictsTableAnnotationComposer,
+          $$CachedVerdictsTableCreateCompanionBuilder,
+          $$CachedVerdictsTableUpdateCompanionBuilder,
+          (
+            CachedVerdict,
+            BaseReferences<_$AppDatabase, $CachedVerdictsTable, CachedVerdict>,
+          ),
+          CachedVerdict,
+          PrefetchHooks Function()
+        > {
+  $$CachedVerdictsTableTableManager(
+    _$AppDatabase db,
+    $CachedVerdictsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$CachedVerdictsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$CachedVerdictsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$CachedVerdictsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<String> companyId = const Value.absent(),
+                Value<String> tenderId = const Value.absent(),
+                Value<String> textHash = const Value.absent(),
+                Value<DateTime> at = const Value.absent(),
+                Value<String> json = const Value.absent(),
+                Value<int> rowid = const Value.absent(),
+              }) => CachedVerdictsCompanion(
+                companyId: companyId,
+                tenderId: tenderId,
+                textHash: textHash,
+                at: at,
+                json: json,
+                rowid: rowid,
+              ),
+          createCompanionCallback:
+              ({
+                required String companyId,
+                required String tenderId,
+                required String textHash,
+                required DateTime at,
+                required String json,
+                Value<int> rowid = const Value.absent(),
+              }) => CachedVerdictsCompanion.insert(
+                companyId: companyId,
+                tenderId: tenderId,
+                textHash: textHash,
+                at: at,
+                json: json,
+                rowid: rowid,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$CachedVerdictsTable, CachedVerdict>(table),
+                  BaseReferences<
+                    _$AppDatabase,
+                    $CachedVerdictsTable,
+                    CachedVerdict
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$CachedVerdictsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $CachedVerdictsTable,
+      CachedVerdict,
+      $$CachedVerdictsTableFilterComposer,
+      $$CachedVerdictsTableOrderingComposer,
+      $$CachedVerdictsTableAnnotationComposer,
+      $$CachedVerdictsTableCreateCompanionBuilder,
+      $$CachedVerdictsTableUpdateCompanionBuilder,
+      (
+        CachedVerdict,
+        BaseReferences<_$AppDatabase, $CachedVerdictsTable, CachedVerdict>,
+      ),
+      CachedVerdict,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -1418,4 +1991,6 @@ class $AppDatabaseManager {
       $$CachedTendersTableTableManager(_db, _db.cachedTenders);
   $$SyncRunsTableTableManager get syncRuns =>
       $$SyncRunsTableTableManager(_db, _db.syncRuns);
+  $$CachedVerdictsTableTableManager get cachedVerdicts =>
+      $$CachedVerdictsTableTableManager(_db, _db.cachedVerdicts);
 }

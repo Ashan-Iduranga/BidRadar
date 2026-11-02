@@ -34,18 +34,22 @@ class TenderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    final result = verdict?.rulesResult ?? rules;
+    // Live rules win over the rules stored with an older verdict.
+    final result = rules ?? verdict?.rulesResult;
     final veto = result?.vetoes.firstOrNull;
-    final warning = veto == null ? result?.warnings.firstOrNull : null;
+    final warning = veto == null
+        ? (verdict?.note ?? result?.warnings.firstOrNull)
+        : null;
     // Without an AI verdict, the rules decide the chip: a veto is NO_BID,
     // a pass with unchecked facts is REVIEW (always with icon and text).
-    final kind =
-        verdict?.verdict ??
-        (veto != null
-            ? VerdictKind.noBid
-            : warning != null
-            ? VerdictKind.review
-            : null);
+    final kind = veto != null
+        ? VerdictKind.noBid
+        : verdict?.verdict ??
+              (veto != null
+                  ? VerdictKind.noBid
+                  : warning != null
+                  ? VerdictKind.review
+                  : null);
 
     return Card(
       clipBehavior: Clip.antiAlias,

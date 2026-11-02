@@ -10,6 +10,7 @@ import '../../ui/deadlines/deadlines_page.dart';
 import '../../ui/feed/feed_page.dart';
 import '../../ui/insights/insights_page.dart';
 import '../../ui/onboarding/onboarding_page.dart';
+import '../../ui/pipeline/bid_page.dart';
 import '../../ui/pipeline/pipeline_page.dart';
 import '../../ui/profile/profile_page.dart';
 import '../../ui/scan/scan_page.dart';
@@ -31,6 +32,7 @@ abstract final class Routes {
   static const scan = '/scan';
   static const approvals = '/approvals';
   static String tender(String id) => '/tender/$id';
+  static String bid(String id) => '/bid/$id';
 }
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -74,6 +76,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/tender/:id',
         builder: (_, state) =>
             TenderDetailPage(tenderId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/bid/:id',
+        builder: (_, state) => BidPage(bidId: state.pathParameters['id']!),
       ),
       GoRoute(path: Routes.scan, builder: (_, _) => const ScanPage()),
       GoRoute(path: Routes.approvals, builder: (_, _) => const ApprovalsPage()),
