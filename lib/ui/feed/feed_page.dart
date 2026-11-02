@@ -117,7 +117,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
         ],
       ),
       body: switch ((all, shown)) {
-        (AsyncError(:final error), _) => ErrorState(
+        (AsyncValue(:final error?), _) when !all.hasValue => ErrorState(
           message: 'Could not read saved tenders: $error',
           onRetry: () => ref.invalidate(cachedTendersProvider),
         ),

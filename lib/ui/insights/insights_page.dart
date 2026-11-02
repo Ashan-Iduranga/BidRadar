@@ -7,6 +7,7 @@ import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../domain/insights/insights.dart';
 import '../../domain/insights/profile_advisor.dart';
+import '../pipeline/pipeline_view_model.dart';
 import '../session/session_providers.dart';
 import '../widgets/state_views.dart';
 import 'insights_view_model.dart';
@@ -19,6 +20,16 @@ class InsightsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final loadError = ref.watch(bidsProvider).error;
+    if (loadError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Insights')),
+        body: ErrorState(
+          message: 'Could not load bids: $loadError',
+          onRetry: () => ref.invalidate(bidsProvider),
+        ),
+      );
+    }
     final s = ref.watch(insightsProvider);
     final isOwner = ref.watch(currentRoleProvider) == UserRole.owner;
 

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -11,8 +13,10 @@ final authStateProvider = StreamProvider<User?>((ref) {
 
 /// Sign-in page ViewModel: holds loading and error state for the form.
 class SignInViewModel extends AsyncNotifier<void> {
+  // Synchronous on purpose: an async build starts in a loading state,
+  // which drew the Sign in buttons disabled for the first frames.
   @override
-  Future<void> build() async {}
+  FutureOr<void> build() {}
 
   Future<void> signIn(String email, String password) => _run(
     () => FirebaseAuth.instance.signInWithEmailAndPassword(

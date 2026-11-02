@@ -17,6 +17,16 @@ class ApprovalsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final loadError = ref.watch(bidsProvider).error;
+    if (loadError != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Approvals')),
+        body: ErrorState(
+          message: 'Could not load bids: $loadError',
+          onRetry: () => ref.invalidate(bidsProvider),
+        ),
+      );
+    }
     final pending = ref.watch(pendingApprovalsProvider);
     final history = ref.watch(approvalsProvider).value ?? const [];
     final bids = {

@@ -21,7 +21,7 @@ Plans: `BidRadar_Proposal.pdf` and `BidRadar_Architecture_and_Implementation_Pla
   - Feed: status, source and sector filters, ranking, an "Updated … ago" line, and offline reading.
   - Tender detail: facts, rule results, the notice text, Open notice, and Share.
 
-- Phase 3 (AI agent and workflow): done on branch `phase-3`.
+- Phase 3 (AI agent and workflow): done.
   - **Bid agent:** Gemini (`gemini-3.5-flash-lite`, free tier) through Firebase AI Logic, protected by App Check.
     - Every quote must appear word for word in the notice: one retry, then REVIEW.
     - Guards run after the AI: a rules veto forces NO_BID; low confidence or fit, unmet or missing evidence, and rule warnings force REVIEW.
@@ -34,6 +34,12 @@ Plans: `BidRadar_Proposal.pdf` and `BidRadar_Architecture_and_Implementation_Pla
   - **Deadlines:** reminders 7, 3 and 1 days before each deadline at 09:00, and a Monday digest.
   - **Scan:** camera, then ML Kit OCR on the device, then Gemini; the user confirms the buyer and deadline.
   - **Insights:** win rate, AI agreement, verdict mix, the fit-score chart, loss reasons, and best buyers and sectors. Gemini suggests profile changes, and the owner accepts them.
+
+- Phase 4 (hardening and evaluation): done on branch `phase-4`.
+  - Accessibility tests run on every page, and the bugs they found were fixed.
+  - Two-device tests: the owner ↔ bid-manager flow, rotation, and offline restart.
+  - The O2 evaluation on 50 real notices. See `eval/README.md` and `docs/TESTING.md`.
+  - **Team task:** label `eval/labels.csv` (O2) and run the real-firm review (O3).
 
 Model note: `gemini-3.8-flash` is also free, but it did not answer within 90 s on this project, so the app uses 3.5 Flash-Lite. The model name lives in `GeminiModel.defaultModel`.
 

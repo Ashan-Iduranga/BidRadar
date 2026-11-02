@@ -80,7 +80,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       ),
       body: switch (data) {
         AsyncData(:final value) => _body(context, value),
-        AsyncError(:final error) => ErrorState(
+        AsyncValue(:final error?) when !data.hasValue => ErrorState(
           message: 'Could not load setup: $error',
           onRetry: () => ref.invalidate(onboardingViewModelProvider),
         ),
