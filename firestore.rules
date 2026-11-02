@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// BidRadar Firestore security rules (first version, Phase 0).
+// BidRadar Firestore security rules (Phase 1: roles and invites).
 // Model: one company per account. companies/{id}.members is a map
 // uid -> "owner" | "bid_manager". Only members read company data;
 // only the owner edits the profile and writes approvals.
@@ -23,14 +23,53 @@ service cloud.firestore {
       return signedIn() && company(companyId).ownerUid == request.auth.uid;
     }
 
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    // The caller holds an invite to this company.
+    function invitedTo(companyId) {
+      let path = /databases/$(database)/documents/invites/$(myEmail());
+      return signedIn() && exists(path)
+        && get(path).data.companyId == companyId;
+    }
+
+    // users/{uid}: which company the user belongs to. Pointing it at a
+    // company you are not a member of grants nothing.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+    }
+
+    // invites/{email}: owner invites a bid manager by email.
+    match /invites/{email} {
+      allow read: if signedIn()
+        && (myEmail() == email || isOwner(resource.data.companyId));
+      allow create: if isOwner(request.resource.data.companyId)
+        && request.resource.data.email == email
+        && request.resource.data.role == 'bid_manager'
+        && request.resource.data.invitedBy == request.auth.uid;
+      allow delete: if signedIn()
+        && (myEmail() == email || isOwner(resource.data.companyId));
+      allow update: if false;
+    }
+
     match /companies/{companyId} {
       allow read: if isMember(companyId);
       // The creator must name themself as owner and owner-member.
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.members[request.auth.uid] == 'owner';
-      allow update: if isOwner(companyId)
-        && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow update: if (isOwner(companyId)
+          && request.resource.data.ownerUid == resource.data.ownerUid)
+        // An invited user may add only themself, only as bid manager.
+        || (invitedTo(companyId)
+          && request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['members', 'memberEmails'])
+          && request.resource.data.members.diff(resource.data.members)
+               .affectedKeys().hasOnly([request.auth.uid])
+          && request.resource.data.members[request.auth.uid] == 'bid_manager'
+          && request.resource.data.memberEmails.diff(resource.data.memberEmails)
+               .affectedKeys().hasOnly([request.auth.uid]));
       allow delete: if false;
     }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/geo/countries.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import 'fit_score_badge.dart';
@@ -13,12 +14,17 @@ class TenderCard extends StatelessWidget {
     super.key,
     required this.tender,
     this.verdict,
+    this.rules,
     this.onTap,
     this.now,
   });
 
   final Tender tender;
   final Verdict? verdict;
+
+  /// Hard-rule result, used before a verdict exists (Phase 1 and 2). A
+  /// veto shows as "No bid" with its reason.
+  final RulesResult? rules;
   final VoidCallback? onTap;
 
   /// Injected clock for tests; defaults to the current time.
@@ -28,7 +34,9 @@ class TenderCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final muted = theme.colorScheme.onSurfaceVariant;
-    final veto = verdict?.rulesResult.vetoes.firstOrNull;
+    final result = verdict?.rulesResult ?? rules;
+    final veto = result?.vetoes.firstOrNull;
+    final kind = verdict?.verdict ?? (veto != null ? VerdictKind.noBid : null);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -58,7 +66,9 @@ class TenderCard extends StatelessWidget {
               ),
               const SizedBox(height: Space.xs),
               Text(
-                '${tender.buyer} · ${tender.country}',
+                tender.country.isEmpty
+                    ? tender.buyer
+                    : '${tender.buyer} · ${Countries.nameOf(tender.country)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: theme.textTheme.bodyMedium?.copyWith(color: muted),
@@ -69,7 +79,7 @@ class TenderCard extends StatelessWidget {
                 runSpacing: Space.sm,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  VerdictChip(verdict: verdict?.verdict, dense: true),
+                  VerdictChip(verdict: kind, dense: true),
                   _Meta(
                     icon: Icons.schedule,
                     text: deadlineLabel(tender.deadline, now ?? DateTime.now()),
@@ -79,9 +89,20 @@ class TenderCard extends StatelessWidget {
               ),
               if (veto != null) ...[
                 const SizedBox(height: Space.sm),
-                Text(
-                  veto.message,
-                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Icon(Icons.block, size: 16, color: muted),
+                    const SizedBox(width: Space.xs),
+                    Expanded(
+                      child: Text(
+                        veto.message,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: muted,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],

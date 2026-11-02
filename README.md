@@ -8,7 +8,17 @@ Plans: `BidRadar_Proposal.pdf` and `BidRadar_Architecture_and_Implementation_Pla
 
 ## Status
 
-Phase 0 (foundations) is done. The app builds and shows all 8 pages as placeholders, and the shared contracts and theme are in place.
+- Phase 0 (foundations): done.
+- Phase 1 (plumbing and data): done on branch `phase-1`.
+  - Sign-up, onboarding (create a company, start from a sample, or accept an invite).
+  - Owner and bid manager roles; Approvals is owner-only.
+  - Company page saved to Firestore.
+  - Live TED and World Bank clients, the drift cache with dedup, and `EligibilityRules`.
+
+Source notes found while building Phase 1:
+- TED's `ACTIVE` scope still returns notices that closed years ago, oldest first. The client filters on open deadlines and sorts newest first.
+- World Bank notices have no CPV codes and give the country as a name. The sector rule only warns on them, and `lib/core/geo/countries.dart` maps names to alpha-3.
+- Neither source states a minimum turnover in a structured field, so the turnover rule fires only when one is known (from scanned notices in Phase 3).
 
 Firebase project: `bidradar-se303`. Firestore is in `asia-south1` (Mumbai) and the security rules are deployed. The Android app (`com.bidradar.app`) is registered with the debug SHA-1 and SHA-256 fingerprints. The steps below are kept for reference, and for anyone who needs to set it up again.
 
