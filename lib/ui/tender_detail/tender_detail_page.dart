@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/geo/countries.dart';
+import '../../core/router/app_router.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
+import '../../domain/pipeline/bid_workflow.dart';
+import '../pipeline/pipeline_view_model.dart';
 import '../widgets/fit_score_badge.dart';
 import '../widgets/state_views.dart';
 import '../widgets/tender_card.dart' show deadlineLabel;
@@ -149,6 +153,10 @@ class _Body extends StatelessWidget {
         _Section(
           title: 'AI verdict',
           child: _VerdictView(tender: t, rules: rules, verdict: verdict),
+        ),
+        _Section(
+          title: 'Pipeline',
+          child: _PipelineSection(tender: t, verdict: verdict),
         ),
         if (t.url != null || t.documentUrls.isNotEmpty)
           _Section(
@@ -414,6 +422,47 @@ class _CriterionTile extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _PipelineSection extends ConsumerWidget {
+  const _PipelineSection({required this.tender, required this.verdict});
+  final Tender tender;
+  final Verdict? verdict;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final bid = ref.watch(bidForTenderProvider(tender.id));
+    if (bid != null) {
+      return Row(
+        children: [
+          const Icon(Icons.view_kanban_outlined, size: IconSizes.sm),
+          const SizedBox(width: Space.sm),
+          Expanded(
+            child: Text(
+              'In the pipeline: ${BidWorkflow.stageLabel(bid.stage)}',
+            ),
+          ),
+          TextButton(
+            onPressed: () => context.push(Routes.bid(bid.id)),
+            child: const Text('Open bid'),
+          ),
+        ],
+      );
+    }
+    return FilledButton.icon(
+      icon: const Icon(Icons.visibility_outlined),
+      label: const Text('Watch this tender'),
+      onPressed: () async {
+        final messenger = ScaffoldMessenger.of(context);
+        final err = await ref
+            .read(bidActionsProvider.notifier)
+            .watch(tender, verdict);
+        messenger.showSnackBar(
+          SnackBar(content: Text(err ?? 'Added to the pipeline (Watching).')),
+        );
+      },
     );
   }
 }

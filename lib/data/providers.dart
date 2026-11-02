@@ -8,6 +8,7 @@ import '../domain/agent/bid_agent.dart';
 import '../domain/agent/gemini_model.dart';
 import '../domain/sync/feed_sync.dart';
 import 'local/app_database.dart';
+import 'repositories/bid_repository.dart';
 import 'repositories/company_repository.dart';
 import 'repositories/sync_store.dart';
 import 'sources/ted_client.dart';
@@ -81,4 +82,8 @@ final feedSyncProvider = Provider<FeedSync>(
 
 final notifierProvider = Provider<NotificationService>(
   (ref) => NotificationService(),
+);
+
+final bidRepositoryProvider = Provider<BidRepository>(
+  (ref) => FirestoreBidRepository(ref.watch(firestoreProvider)),
 );
