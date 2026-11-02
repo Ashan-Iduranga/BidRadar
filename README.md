@@ -9,11 +9,21 @@ Plans: `BidRadar_Proposal.pdf` and `BidRadar_Architecture_and_Implementation_Pla
 ## Status
 
 - Phase 0 (foundations): done.
-- Phase 1 (plumbing and data): done on branch `phase-1`.
+- Phase 1 (plumbing and data): done.
   - Sign-up, onboarding (create a company, start from a sample, or accept an invite).
   - Owner and bid manager roles; Approvals is owner-only.
   - Company page saved to Firestore.
   - Live TED and World Bank clients, the drift cache with dedup, and `EligibilityRules`.
+
+- Phase 2 (automation core and feed): done on branch `phase-2`.
+  - `FeedSync` (`lib/domain/sync/feed_sync.dart`) runs the pipeline: fetch, dedup, hard rules, cache, Firestore. Vetoed tenders get a `rules_veto` NO_BID audit verdict and never reach the AI.
+  - Background sync every 6 hours with WorkManager, with the notification "N new tenders match". "Sync now" and pull to refresh run the same code.
+  - Feed: status, source and sector filters, ranking, an "Updated … ago" line, and offline reading.
+  - Tender detail: facts, rule results, the notice text, Open notice, and Share.
+
+### Testing background sync
+
+Android won't run periodic WorkManager jobs early, even when they are forced through `adb`. In debug builds, the Feed's overflow menu has **Run background sync (debug)**. It queues the same task once, in the background isolate.
 
 Source notes found while building Phase 1:
 - TED's `ACTIVE` scope still returns notices that closed years ago, oldest first. The client filters on open deadlines and sorts newest first.

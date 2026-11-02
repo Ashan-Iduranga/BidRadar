@@ -1,4 +1,6 @@
 ﻿<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- "N new tenders match" after background sync (Android 13+). -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="BidRadar"
         android:name="${applicationName}"

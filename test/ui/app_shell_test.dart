@@ -17,6 +17,7 @@ void main() {
           firebaseReadyProvider.overrideWithValue(false),
           // Widget tests do not open the drift database.
           cachedTendersProvider.overrideWith((ref) => Stream.value([])),
+          lastSyncProvider.overrideWith((ref) => Stream.value(null)),
         ],
         child: const BidRadarApp(),
       ),

@@ -2,8 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/net/resilient_http.dart';
+import '../core/notifications/notification_service.dart';
+import '../domain/sync/feed_sync.dart';
 import 'local/app_database.dart';
 import 'repositories/company_repository.dart';
+import 'repositories/sync_store.dart';
 import 'sources/ted_client.dart';
 import 'sources/tender_source.dart';
 import 'sources/worldbank_client.dart';
@@ -41,4 +44,25 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
 
 final tenderCacheProvider = Provider<TenderCache>(
   (ref) => TenderCache(ref.watch(appDatabaseProvider)),
+);
+
+final syncLogProvider = Provider<SyncLog>(
+  (ref) => SyncLog(ref.watch(appDatabaseProvider)),
+);
+
+final syncStoreProvider = Provider<SyncStore>(
+  (ref) => FirestoreSyncStore(ref.watch(firestoreProvider)),
+);
+
+final feedSyncProvider = Provider<FeedSync>(
+  (ref) => FeedSync(
+    sources: ref.watch(tenderSourcesProvider),
+    cache: ref.watch(tenderCacheProvider),
+    log: ref.watch(syncLogProvider),
+    store: ref.watch(syncStoreProvider),
+  ),
+);
+
+final notifierProvider = Provider<NotificationService>(
+  (ref) => NotificationService(),
 );
