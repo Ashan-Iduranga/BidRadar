@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../domain/sync/background_sync.dart';
@@ -62,80 +63,83 @@ class _FeedPageState extends ConsumerState<FeedPage> {
     final isOwner = ref.watch(currentRoleProvider) == UserRole.owner;
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('Feed'),
-            if (profile != null)
-              Text(
-                syncing
-                    ? 'Syncing…'
-                    : updatedLabel(lastRun?.toLocal(), DateTime.now()),
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Feed'),
+              if (profile != null)
+                Text(
+                  syncing
+                      ? 'Syncing…'
+                      : updatedLabel(lastRun?.toLocal(), DateTime.now()),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
+            ],
+          ),
+          actions: [
+            if (profile != null)
+              IconButton(
+                tooltip: 'Sync now',
+                icon: syncing
+                    ? const SizedBox.square(
+                        dimension: IconSizes.sm,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.sync),
+                onPressed: syncing ? null : _sync,
+              ),
+            if (isOwner)
+              IconButton(
+                tooltip: 'Approvals',
+                icon: const Icon(Icons.fact_check_outlined),
+                onPressed: () => context.push(Routes.approvals),
+              ),
+            if (kDebugMode && profile != null)
+              PopupMenuButton<void>(
+                tooltip: 'Debug',
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    onTap: () {
+                      BackgroundSync.runSoonForTesting();
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Background sync queued (debug).'),
+                        ),
+                      );
+                    },
+                    child: const Text('Run background sync (debug)'),
+                  ),
+                ],
               ),
           ],
         ),
-        actions: [
-          if (profile != null)
-            IconButton(
-              tooltip: 'Sync now',
-              icon: syncing
-                  ? const SizedBox.square(
-                      dimension: IconSizes.sm,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.sync),
-              onPressed: syncing ? null : _sync,
-            ),
-          if (isOwner)
-            IconButton(
-              tooltip: 'Approvals',
-              icon: const Icon(Icons.fact_check_outlined),
-              onPressed: () => context.push(Routes.approvals),
-            ),
-          if (kDebugMode && profile != null)
-            PopupMenuButton<void>(
-              tooltip: 'Debug',
-              itemBuilder: (_) => [
-                PopupMenuItem(
-                  onTap: () {
-                    BackgroundSync.runSoonForTesting();
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Background sync queued (debug).'),
-                      ),
-                    );
-                  },
-                  child: const Text('Run background sync (debug)'),
-                ),
-              ],
-            ),
-        ],
-      ),
-      body: switch ((all, shown)) {
-        (AsyncValue(:final error?), _) when !all.hasValue => ErrorState(
-          message: 'Could not read saved tenders: $error',
-          onRetry: () => ref.invalidate(cachedTendersProvider),
+        body: switch ((all, shown)) {
+          (AsyncValue(:final error?), _) when !all.hasValue => ErrorState(
+            message: 'Could not read saved tenders: $error',
+            onRetry: () => ref.invalidate(cachedTendersProvider),
+          ),
+          (AsyncData(value: final items), AsyncData(value: final visible)) =>
+            items.isEmpty
+                ? _empty(profile != null, syncing)
+                : Column(
+                    children: [
+                      _SummaryHero(items: items),
+                      _FilterBar(profile: profile, items: items),
+                      Expanded(child: _list(visible, items.length)),
+                    ],
+                  ),
+          _ => const Center(child: CircularProgressIndicator()),
+        },
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => context.push(Routes.scan),
+          icon: const Icon(Icons.document_scanner_outlined),
+          label: const Text('Scan notice'),
         ),
-        (AsyncData(value: final items), AsyncData(value: final visible)) =>
-          items.isEmpty
-              ? _empty(profile != null, syncing)
-              : Column(
-                  children: [
-                    _FilterBar(profile: profile, items: items),
-                    Expanded(child: _list(visible, items.length)),
-                  ],
-                ),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => context.push(Routes.scan),
-        icon: const Icon(Icons.document_scanner_outlined),
-        label: const Text('Scan notice'),
       ),
     );
   }
@@ -207,6 +211,92 @@ class _FeedPageState extends ConsumerState<FeedPage> {
                 );
               },
             ),
+    );
+  }
+}
+
+/// Gradient summary at the top of the Feed: what the agent says is worth
+/// bidding, what closes soon, and how many tenders are saved offline.
+class _SummaryHero extends StatelessWidget {
+  const _SummaryHero({required this.items});
+  final List<FeedItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final bid = applyFeedFilter(
+      items,
+      const FeedFilter(status: FeedStatus.bid),
+    ).length;
+    final closing = applyFeedFilter(items, const FeedFilter()).where((i) {
+      final d = i.tender.deadline;
+      return d != null && d.isAfter(now) && d.difference(now).inDays < 7;
+    }).length;
+
+    Widget stat(int n, String label) => Expanded(
+      child: Column(
+        children: [
+          Text(
+            '$n',
+            style: theme.textTheme.headlineSmall?.copyWith(
+              color: Colors.white,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppTheme.heroMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+    Widget rule() => Container(
+      width: 1,
+      height: 36,
+      color: Colors.white.withValues(alpha: .24),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        Space.gutter,
+        Space.xs,
+        Space.gutter,
+        Space.sm,
+      ),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: AppTheme.heroGradient(theme.brightness),
+          borderRadius: BorderRadius.circular(Radii.lg),
+          boxShadow: [
+            BoxShadow(
+              color: Brand.azureDeep.withValues(alpha: .25),
+              blurRadius: 24,
+              offset: const Offset(0, 10),
+              spreadRadius: -12,
+            ),
+          ],
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            vertical: Space.lg,
+            horizontal: Space.sm,
+          ),
+          child: Row(
+            children: [
+              stat(bid, 'AI says bid'),
+              rule(),
+              stat(closing, 'Close this week'),
+              rule(),
+              stat(items.length, 'Saved tenders'),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

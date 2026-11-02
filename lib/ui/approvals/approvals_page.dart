@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../pipeline/approval_dialog.dart';
@@ -19,11 +20,13 @@ class ApprovalsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loadError = ref.watch(bidsProvider).error;
     if (loadError != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Approvals')),
-        body: ErrorState(
-          message: 'Could not load bids: $loadError',
-          onRetry: () => ref.invalidate(bidsProvider),
+      return GradientBackground(
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Approvals')),
+          body: ErrorState(
+            message: 'Could not load bids: $loadError',
+            onRetry: () => ref.invalidate(bidsProvider),
+          ),
         ),
       );
     }
@@ -34,69 +37,72 @@ class ApprovalsPage extends ConsumerWidget {
     };
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Approvals')),
-      body: pending.isEmpty && history.isEmpty
-          ? const EmptyState(
-              icon: Icons.fact_check_outlined,
-              title: 'Nothing to approve',
-              message:
-                  'When a bid manager asks to prepare a bid, it waits here '
-                  "for the owner's decision.",
-            )
-          : ListView(
-              padding: const EdgeInsets.all(Space.gutter),
-              children: [
-                Text(
-                  pending.isEmpty
-                      ? 'Nothing waiting'
-                      : '${pending.length} waiting for you',
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: Space.sm),
-                for (final b in pending)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.sm),
-                    child: BidCard(
-                      bid: b,
-                      trailing: Align(
-                        alignment: Alignment.centerRight,
-                        child: FilledButton(
-                          onPressed: () => showApprovalDialog(context, ref, b),
-                          child: const Text('Decide'),
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Approvals')),
+        body: pending.isEmpty && history.isEmpty
+            ? const EmptyState(
+                icon: Icons.fact_check_outlined,
+                title: 'Nothing to approve',
+                message:
+                    'When a bid manager asks to prepare a bid, it waits here '
+                    "for the owner's decision.",
+              )
+            : ListView(
+                padding: const EdgeInsets.all(Space.gutter),
+                children: [
+                  Text(
+                    pending.isEmpty
+                        ? 'Nothing waiting'
+                        : '${pending.length} waiting for you',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: Space.sm),
+                  for (final b in pending)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.sm),
+                      child: BidCard(
+                        bid: b,
+                        trailing: Align(
+                          alignment: Alignment.centerRight,
+                          child: FilledButton(
+                            onPressed: () =>
+                                showApprovalDialog(context, ref, b),
+                            child: const Text('Decide'),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                if (history.isNotEmpty) ...[
-                  const SizedBox(height: Space.xl),
-                  Text('Decisions', style: theme.textTheme.titleMedium),
-                  for (final a in history)
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        a.decision == ApprovalDecision.approved
-                            ? Icons.check_circle_outline
-                            : Icons.cancel_outlined,
-                      ),
-                      title: Text(
-                        bids[a.bidId]?.title ?? 'Removed bid',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        [
+                  if (history.isNotEmpty) ...[
+                    const SizedBox(height: Space.xl),
+                    Text('Decisions', style: theme.textTheme.titleMedium),
+                    for (final a in history)
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(
                           a.decision == ApprovalDecision.approved
-                              ? 'Approved'
-                              : 'Rejected',
-                          DateFormat.yMMMd().add_jm().format(a.at.toLocal()),
-                          if (a.note.isNotEmpty) '"${a.note}"',
-                        ].join(' · '),
+                              ? Icons.check_circle_outline
+                              : Icons.cancel_outlined,
+                        ),
+                        title: Text(
+                          bids[a.bidId]?.title ?? 'Removed bid',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          [
+                            a.decision == ApprovalDecision.approved
+                                ? 'Approved'
+                                : 'Rejected',
+                            DateFormat.yMMMd().add_jm().format(a.at.toLocal()),
+                            if (a.note.isNotEmpty) '"${a.note}"',
+                          ].join(' · '),
+                        ),
                       ),
-                    ),
+                  ],
                 ],
-              ],
-            ),
+              ),
+      ),
     );
   }
 }

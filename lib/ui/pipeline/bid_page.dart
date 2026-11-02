@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../domain/pipeline/bid_workflow.dart';
@@ -21,22 +22,24 @@ class BidPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final bid = ref.watch(bidProvider(bidId));
-    return Scaffold(
-      appBar: AppBar(title: const Text('Bid')),
-      body: switch (bid) {
-        AsyncValue(:final error?) when !bid.hasValue => ErrorState(
-          message: '$error',
-        ),
-        AsyncData(value: null) => EmptyState(
-          icon: Icons.view_kanban_outlined,
-          title: 'Bid removed',
-          message: 'This bid is no longer in the pipeline.',
-          actionLabel: 'Back',
-          onAction: () => Navigator.of(context).maybePop(),
-        ),
-        AsyncData(:final value?) => _BidBody(bid: value),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Bid')),
+        body: switch (bid) {
+          AsyncValue(:final error?) when !bid.hasValue => ErrorState(
+            message: '$error',
+          ),
+          AsyncData(value: null) => EmptyState(
+            icon: Icons.view_kanban_outlined,
+            title: 'Bid removed',
+            message: 'This bid is no longer in the pipeline.',
+            actionLabel: 'Back',
+            onAction: () => Navigator.of(context).maybePop(),
+          ),
+          AsyncData(:final value?) => _BidBody(bid: value),
+          _ => const Center(child: CircularProgressIndicator()),
+        },
+      ),
     );
   }
 }

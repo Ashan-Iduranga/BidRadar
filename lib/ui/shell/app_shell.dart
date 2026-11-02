@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/firebase/firebase_bootstrap.dart';
+import '../../core/theme/app_theme.dart';
 import '../deadlines/deadlines_view_model.dart';
 
 /// Bottom navigation for the 5 top-level pages. Tender detail, Scan and
@@ -45,18 +46,20 @@ class AppShell extends ConsumerWidget {
     final firebaseReady = ref.watch(firebaseReadyProvider);
     // Deadline reminders follow the pipeline while the app is open.
     if (firebaseReady) ref.watch(reminderSyncProvider);
-    return Scaffold(
-      body: Column(
-        children: [
-          if (!firebaseReady) const _FirebaseMissingBanner(),
-          Expanded(child: shell),
-        ],
-      ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: shell.currentIndex,
-        destinations: _destinations,
-        onDestinationSelected: (i) =>
-            shell.goBranch(i, initialLocation: i == shell.currentIndex),
+    return GradientBackground(
+      child: Scaffold(
+        body: Column(
+          children: [
+            if (!firebaseReady) const _FirebaseMissingBanner(),
+            Expanded(child: shell),
+          ],
+        ),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: shell.currentIndex,
+          destinations: _destinations,
+          onDestinationSelected: (i) =>
+              shell.goBranch(i, initialLocation: i == shell.currentIndex),
+        ),
       ),
     );
   }

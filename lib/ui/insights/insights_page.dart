@@ -2,6 +2,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/status_colors.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
@@ -22,75 +23,79 @@ class InsightsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loadError = ref.watch(bidsProvider).error;
     if (loadError != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Insights')),
-        body: ErrorState(
-          message: 'Could not load bids: $loadError',
-          onRetry: () => ref.invalidate(bidsProvider),
+      return GradientBackground(
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Insights')),
+          body: ErrorState(
+            message: 'Could not load bids: $loadError',
+            onRetry: () => ref.invalidate(bidsProvider),
+          ),
         ),
       );
     }
     final s = ref.watch(insightsProvider);
     final isOwner = ref.watch(currentRoleProvider) == UserRole.owner;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Insights')),
-      body: s.judged == 0 && s.decided == 0 && s.open == 0
-          ? const EmptyState(
-              icon: Icons.insights_outlined,
-              title: 'No results yet',
-              message:
-                  'Insights appear once tenders are judged and bids have '
-                  'outcomes. Mark bids as won or lost in the pipeline.',
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(
-                Space.gutter,
-                Space.sm,
-                Space.gutter,
-                Space.xxl,
-              ),
-              children: [
-                _StatRow(stats: s),
-                if (s.judged > 0) ...[
-                  const _Heading(
-                    'AI verdicts',
-                    'Every tender the bid agent has judged.',
-                  ),
-                  _VerdictMix(mix: s.verdictMix, total: s.judged),
-                ],
-                if (s.fitBands.any((b) => b > 0)) ...[
-                  const _Heading(
-                    'Fit scores',
-                    'How well judged tenders match your profile.',
-                  ),
-                  _FitChart(bands: s.fitBands),
-                ],
-                const _Heading(
-                  'Why bids were lost',
-                  'Reasons recorded when bids were marked lost.',
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Insights')),
+        body: s.judged == 0 && s.decided == 0 && s.open == 0
+            ? const EmptyState(
+                icon: Icons.insights_outlined,
+                title: 'No results yet',
+                message:
+                    'Insights appear once tenders are judged and bids have '
+                    'outcomes. Mark bids as won or lost in the pipeline.',
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.gutter,
+                  Space.sm,
+                  Space.gutter,
+                  Space.xxl,
                 ),
-                if (s.lossReasons.isEmpty)
-                  const _Muted('No lost bids yet.')
-                else
-                  _RankedBars(items: s.lossReasons, unit: _Unit.count),
-                if (s.topBuyers.isNotEmpty) ...[
+                children: [
+                  _StatRow(stats: s),
+                  if (s.judged > 0) ...[
+                    const _Heading(
+                      'AI verdicts',
+                      'Every tender the bid agent has judged.',
+                    ),
+                    _VerdictMix(mix: s.verdictMix, total: s.judged),
+                  ],
+                  if (s.fitBands.any((b) => b > 0)) ...[
+                    const _Heading(
+                      'Fit scores',
+                      'How well judged tenders match your profile.',
+                    ),
+                    _FitChart(bands: s.fitBands),
+                  ],
                   const _Heading(
-                    'Best-fitting buyers',
-                    'Average AI fit score of their tenders.',
+                    'Why bids were lost',
+                    'Reasons recorded when bids were marked lost.',
                   ),
-                  _RankedBars(items: s.topBuyers, unit: _Unit.fit),
+                  if (s.lossReasons.isEmpty)
+                    const _Muted('No lost bids yet.')
+                  else
+                    _RankedBars(items: s.lossReasons, unit: _Unit.count),
+                  if (s.topBuyers.isNotEmpty) ...[
+                    const _Heading(
+                      'Best-fitting buyers',
+                      'Average AI fit score of their tenders.',
+                    ),
+                    _RankedBars(items: s.topBuyers, unit: _Unit.fit),
+                  ],
+                  if (s.topSectors.isNotEmpty) ...[
+                    const _Heading(
+                      'Best-fitting sectors',
+                      'Average AI fit score by CPV division.',
+                    ),
+                    _RankedBars(items: s.topSectors, unit: _Unit.fit),
+                  ],
+                  if (s.lost > 0) _Advisor(isOwner: isOwner),
                 ],
-                if (s.topSectors.isNotEmpty) ...[
-                  const _Heading(
-                    'Best-fitting sectors',
-                    'Average AI fit score by CPV division.',
-                  ),
-                  _RankedBars(items: s.topSectors, unit: _Unit.fit),
-                ],
-                if (s.lost > 0) _Advisor(isOwner: isOwner),
-              ],
-            ),
+              ),
+      ),
     );
   }
 }

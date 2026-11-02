@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../core/firebase/firebase_bootstrap.dart';
 import '../../core/geo/countries.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../onboarding/onboarding_page.dart' show parseAmount;
@@ -21,12 +22,14 @@ class ProfilePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!ref.watch(firebaseReadyProvider)) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Company')),
-        body: const EmptyState(
-          icon: Icons.cloud_off_outlined,
-          title: 'Firebase is not configured',
-          message: 'The company profile is stored in Firestore.',
+      return GradientBackground(
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Company')),
+          body: const EmptyState(
+            icon: Icons.cloud_off_outlined,
+            title: 'Firebase is not configured',
+            message: 'The company profile is stored in Firestore.',
+          ),
         ),
       );
     }
@@ -36,18 +39,20 @@ class ProfilePage extends ConsumerWidget {
     final c = company.value;
     final p = edit.draft;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Company')),
-      body: (c == null || p == null)
-          ? company.hasError
-                ? ErrorState(message: 'Could not load the company.')
-                : const Center(child: CircularProgressIndicator())
-          : _ProfileBody(
-              company: c,
-              profile: p,
-              canEdit: role == UserRole.owner,
-            ),
-      bottomNavigationBar: edit.dirty ? _SaveBar(saving: edit.saving) : null,
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Company')),
+        body: (c == null || p == null)
+            ? company.hasError
+                  ? ErrorState(message: 'Could not load the company.')
+                  : const Center(child: CircularProgressIndicator())
+            : _ProfileBody(
+                company: c,
+                profile: p,
+                canEdit: role == UserRole.owner,
+              ),
+        bottomNavigationBar: edit.dirty ? _SaveBar(saving: edit.saving) : null,
+      ),
     );
   }
 }

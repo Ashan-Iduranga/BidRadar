@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../domain/scan/scan.dart';
 import '../onboarding/onboarding_page.dart' show parseAmount;
@@ -86,27 +87,29 @@ class _ScanPageState extends ConsumerState<ScanPage> {
     });
     final vm = ref.read(scanViewModelProvider.notifier);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Scan a notice')),
-      body: switch (state) {
-        ScanWorking(:final step) => Center(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const CircularProgressIndicator(),
-              const SizedBox(height: Space.lg),
-              Text(step),
-            ],
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Scan a notice')),
+        body: switch (state) {
+          ScanWorking(:final step) => Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: Space.lg),
+                Text(step),
+              ],
+            ),
           ),
-        ),
-        ScanFailed(:final message) => ErrorState(
-          title: 'Could not scan',
-          message: message,
-          onRetry: vm.reset,
-        ),
-        ScanReview() => _ReviewForm(review: state),
-        _ => _capture(vm),
-      },
+          ScanFailed(:final message) => ErrorState(
+            title: 'Could not scan',
+            message: message,
+            onRetry: vm.reset,
+          ),
+          ScanReview() => _ReviewForm(review: state),
+          _ => _capture(vm),
+        },
+      ),
     );
   }
 

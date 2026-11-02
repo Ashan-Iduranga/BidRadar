@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/geo/countries.dart';
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../domain/pipeline/bid_workflow.dart';
@@ -28,41 +29,43 @@ class TenderDetailPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final detail = ref.watch(tenderDetailProvider(tenderId));
     final tender = detail.value?.tender;
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Tender'),
-        actions: [
-          if (tender != null)
-            IconButton(
-              tooltip: 'Share',
-              icon: const Icon(Icons.share_outlined),
-              onPressed: () => SharePlus.instance.share(
-                ShareParams(text: shareText(tender), subject: tender.title),
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Tender'),
+          actions: [
+            if (tender != null)
+              IconButton(
+                tooltip: 'Share',
+                icon: const Icon(Icons.share_outlined),
+                onPressed: () => SharePlus.instance.share(
+                  ShareParams(text: shareText(tender), subject: tender.title),
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
+        body: switch (detail) {
+          AsyncValue(:final error?) when !detail.hasValue => ErrorState(
+            message: 'Could not read this tender: $error',
+            onRetry: () => ref.invalidate(cachedTenderProvider(tenderId)),
+          ),
+          AsyncData(value: TenderDetail(tender: null)) => EmptyState(
+            icon: Icons.description_outlined,
+            title: 'Tender not found',
+            message:
+                'This tender is no longer cached on this device. Closed '
+                'tenders are removed after each sync.',
+            actionLabel: 'Back to feed',
+            onAction: () => Navigator.of(context).maybePop(),
+          ),
+          AsyncData(:final value) => _Body(
+            tender: value.tender!,
+            rules: value.rules,
+            verdict: value.verdict,
+          ),
+          _ => const Center(child: CircularProgressIndicator()),
+        },
       ),
-      body: switch (detail) {
-        AsyncValue(:final error?) when !detail.hasValue => ErrorState(
-          message: 'Could not read this tender: $error',
-          onRetry: () => ref.invalidate(cachedTenderProvider(tenderId)),
-        ),
-        AsyncData(value: TenderDetail(tender: null)) => EmptyState(
-          icon: Icons.description_outlined,
-          title: 'Tender not found',
-          message:
-              'This tender is no longer cached on this device. Closed '
-              'tenders are removed after each sync.',
-          actionLabel: 'Back to feed',
-          onAction: () => Navigator.of(context).maybePop(),
-        ),
-        AsyncData(:final value) => _Body(
-          tender: value.tender!,
-          rules: value.rules,
-          verdict: value.verdict,
-        ),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
     );
   }
 }

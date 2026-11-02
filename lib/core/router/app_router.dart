@@ -18,6 +18,7 @@ import '../../ui/session/session_providers.dart';
 import '../../ui/shell/app_shell.dart';
 import '../../ui/tender_detail/tender_detail_page.dart';
 import '../firebase/firebase_bootstrap.dart';
+import '../theme/app_theme.dart';
 
 /// Route paths, in one place so pages never hard-code strings.
 abstract final class Routes {
@@ -122,9 +123,13 @@ class _LoadingPage extends StatelessWidget {
   const _LoadingPage();
 
   @override
-  Widget build(BuildContext context) => const Scaffold(
-    body: Center(
-      child: CircularProgressIndicator(semanticsLabel: 'Loading your company'),
+  Widget build(BuildContext context) => const GradientBackground(
+    child: Scaffold(
+      body: Center(
+        child: CircularProgressIndicator(
+          semanticsLabel: 'Loading your company',
+        ),
+      ),
     ),
   );
 }

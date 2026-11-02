@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../domain/pipeline/bid_workflow.dart';
@@ -21,41 +22,43 @@ class PipelinePage extends ConsumerWidget {
     final bids = ref.watch(bidsProvider);
     return DefaultTabController(
       length: BidStage.values.length,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Pipeline'),
-          bottom: TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              for (final s in BidStage.values)
-                Tab(
-                  text:
-                      '${BidWorkflow.stageLabel(s)} '
-                      '${bids.value?.where((b) => b.stage == s).length ?? ''}',
-                ),
-            ],
+      child: GradientBackground(
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Pipeline'),
+            bottom: TabBar(
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [
+                for (final s in BidStage.values)
+                  Tab(
+                    text:
+                        '${BidWorkflow.stageLabel(s)} '
+                        '${bids.value?.where((b) => b.stage == s).length ?? ''}',
+                  ),
+              ],
+            ),
           ),
+          // Check the error first: while Riverpod retries a failed stream the
+          // state is "loading with an error", which would otherwise spin.
+          body: switch (bids) {
+            AsyncValue(:final error?) when !bids.hasValue => ErrorState(
+              message: 'Could not load bids: $error',
+              onRetry: () => ref.invalidate(bidsProvider),
+            ),
+            AsyncData(:final value) => TabBarView(
+              children: [
+                for (final s in BidStage.values)
+                  _StageList(
+                    stage: s,
+                    bids: value.where((b) => b.stage == s).toList()
+                      ..sort(_byDeadline),
+                  ),
+              ],
+            ),
+            _ => const Center(child: CircularProgressIndicator()),
+          },
         ),
-        // Check the error first: while Riverpod retries a failed stream the
-        // state is "loading with an error", which would otherwise spin.
-        body: switch (bids) {
-          AsyncValue(:final error?) when !bids.hasValue => ErrorState(
-            message: 'Could not load bids: $error',
-            onRetry: () => ref.invalidate(bidsProvider),
-          ),
-          AsyncData(:final value) => TabBarView(
-            children: [
-              for (final s in BidStage.values)
-                _StageList(
-                  stage: s,
-                  bids: value.where((b) => b.stage == s).toList()
-                    ..sort(_byDeadline),
-                ),
-            ],
-          ),
-          _ => const Center(child: CircularProgressIndicator()),
-        },
       ),
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../pipeline/pipeline_page.dart' show BidCard;
@@ -18,11 +19,13 @@ class DeadlinesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loadError = ref.watch(bidsProvider).error;
     if (loadError != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Deadlines')),
-        body: ErrorState(
-          message: 'Could not load bids: $loadError',
-          onRetry: () => ref.invalidate(bidsProvider),
+      return GradientBackground(
+        child: Scaffold(
+          appBar: AppBar(title: const Text('Deadlines')),
+          body: ErrorState(
+            message: 'Could not load bids: $loadError',
+            onRetry: () => ref.invalidate(bidsProvider),
+          ),
         ),
       );
     }
@@ -35,63 +38,65 @@ class DeadlinesPage extends ConsumerWidget {
               .where((b) => DateUtils.isSameDay(b.deadline!.toLocal(), cal.day))
               .toList();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Deadlines')),
-      body: bids.isEmpty
-          ? const EmptyState(
-              icon: Icons.event_outlined,
-              title: 'No upcoming deadlines',
-              message:
-                  'Watch a tender to track its deadline. BidRadar reminds '
-                  'you 7, 3 and 1 days before, and sends a digest on Mondays.',
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(
-                Space.gutter,
-                Space.sm,
-                Space.gutter,
-                Space.xxl,
-              ),
-              children: [
-                _MonthGrid(bids: bids, state: cal),
-                const SizedBox(height: Space.md),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.notifications_active_outlined,
-                      size: IconSizes.sm,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: Space.sm),
-                    Expanded(
-                      child: Text(
-                        'Reminders 7, 3 and 1 days before, at 9:00. '
-                        'Weekly digest on Mondays.',
-                        style: theme.textTheme.bodySmall,
+    return GradientBackground(
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Deadlines')),
+        body: bids.isEmpty
+            ? const EmptyState(
+                icon: Icons.event_outlined,
+                title: 'No upcoming deadlines',
+                message:
+                    'Watch a tender to track its deadline. BidRadar reminds '
+                    'you 7, 3 and 1 days before, and sends a digest on Mondays.',
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.gutter,
+                  Space.sm,
+                  Space.gutter,
+                  Space.xxl,
+                ),
+                children: [
+                  _MonthGrid(bids: bids, state: cal),
+                  const SizedBox(height: Space.md),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.notifications_active_outlined,
+                        size: IconSizes.sm,
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
+                      const SizedBox(width: Space.sm),
+                      Expanded(
+                        child: Text(
+                          'Reminders 7, 3 and 1 days before, at 9:00. '
+                          'Weekly digest on Mondays.',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: Space.lg),
+                  Text(
+                    cal.day == null
+                        ? 'All upcoming'
+                        : DateFormat.yMMMMEEEEd().format(cal.day!),
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: Space.sm),
+                  if (shown.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: Space.lg),
+                      child: Text('No deadlines on this day.'),
                     ),
-                  ],
-                ),
-                const SizedBox(height: Space.lg),
-                Text(
-                  cal.day == null
-                      ? 'All upcoming'
-                      : DateFormat.yMMMMEEEEd().format(cal.day!),
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: Space.sm),
-                if (shown.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: Space.lg),
-                    child: Text('No deadlines on this day.'),
-                  ),
-                for (final b in shown)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.sm),
-                    child: BidCard(bid: b),
-                  ),
-              ],
-            ),
+                  for (final b in shown)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.sm),
+                      child: BidCard(bid: b),
+                    ),
+                ],
+              ),
+      ),
     );
   }
 }
