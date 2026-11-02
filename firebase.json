@@ -1,0 +1,25 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "bidradar-se303",
+          "appId": "1:679601710153:android:36e83af4e619b2d9d7cb98",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "bidradar-se303",
+          "configurations": {
+            "android": "1:679601710153:android:36e83af4e619b2d9d7cb98"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  }
+}

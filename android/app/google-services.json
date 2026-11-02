@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "679601710153",
+    "project_id": "bidradar-se303",
+    "storage_bucket": "bidradar-se303.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:679601710153:android:36e83af4e619b2d9d7cb98",
+        "android_client_info": {
+          "package_name": "com.bidradar.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbDm8f5vieh6MgUCn9bSVwN9-I89kKlak"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

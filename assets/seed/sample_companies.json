@@ -1,0 +1,100 @@
+{
+  "_comment": "3 sample company profiles for development, demos and the 50-notice evaluation. Synthetic data only. Countries are ISO 3166-1 alpha-3; CPV codes are 8 digits without the check digit.",
+  "companies": [
+    {
+      "company": {
+        "id": "sample-it-lanka",
+        "name": "Lanka Code Works (sample)",
+        "country": "LKA",
+        "annualTurnover": 850000,
+        "currency": "EUR",
+        "teamSize": 28,
+        "ownerUid": "sample-owner-1",
+        "members": {}
+      },
+      "profile": {
+        "companyId": "sample-it-lanka",
+        "cpvCodes": ["72000000", "48000000", "72200000", "72500000"],
+        "countries": ["LKA", "IND", "MDV", "BGD", "NPL"],
+        "certifications": ["ISO 9001", "ISO/IEC 27001"],
+        "pastContracts": [
+          {
+            "title": "Hospital appointment system",
+            "buyer": "Provincial Health Ministry",
+            "year": 2025,
+            "value": 120000,
+            "cpvCodes": ["72200000"]
+          },
+          {
+            "title": "School records portal maintenance",
+            "buyer": "District Education Office",
+            "year": 2024,
+            "value": 45000,
+            "cpvCodes": ["72500000"]
+          }
+        ]
+      }
+    },
+    {
+      "company": {
+        "id": "sample-consult-eu",
+        "name": "Baltic Advisory Partners (sample)",
+        "country": "LVA",
+        "annualTurnover": 2400000,
+        "currency": "EUR",
+        "teamSize": 35,
+        "ownerUid": "sample-owner-2",
+        "members": {}
+      },
+      "profile": {
+        "companyId": "sample-consult-eu",
+        "cpvCodes": ["79400000", "79410000", "73200000", "80500000"],
+        "countries": ["LVA", "LTU", "EST", "POL", "FIN"],
+        "certifications": ["ISO 9001"],
+        "pastContracts": [
+          {
+            "title": "Digital transformation strategy for a municipality",
+            "buyer": "Riga City Council",
+            "year": 2025,
+            "value": 310000,
+            "cpvCodes": ["79410000"]
+          }
+        ]
+      }
+    },
+    {
+      "company": {
+        "id": "sample-build-supply",
+        "name": "Ceylon Build & Supply (sample)",
+        "country": "LKA",
+        "annualTurnover": 4100000,
+        "currency": "USD",
+        "teamSize": 48,
+        "ownerUid": "sample-owner-3",
+        "members": {}
+      },
+      "profile": {
+        "companyId": "sample-build-supply",
+        "cpvCodes": ["45000000", "45210000", "44100000", "30200000"],
+        "countries": ["LKA", "MDV"],
+        "certifications": ["ISO 9001", "ISO 14001", "CIDA C3 grading"],
+        "pastContracts": [
+          {
+            "title": "Rural school building, 3 classrooms",
+            "buyer": "Ministry of Education",
+            "year": 2025,
+            "value": 650000,
+            "cpvCodes": ["45210000"]
+          },
+          {
+            "title": "Supply of desktop computers",
+            "buyer": "Divisional Secretariat",
+            "year": 2024,
+            "value": 90000,
+            "cpvCodes": ["30200000"]
+          }
+        ]
+      }
+    }
+  ]
+}

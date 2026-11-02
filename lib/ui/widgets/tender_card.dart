@@ -1,0 +1,136 @@
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+
+import '../../core/theme/tokens.dart';
+import '../../data/models/models.dart';
+import 'fit_score_badge.dart';
+import 'verdict_chip.dart';
+
+/// One tender in the Feed. Shows the verdict, fit score, buyer, deadline and
+/// the first veto reason if hard rules removed it.
+class TenderCard extends StatelessWidget {
+  const TenderCard({
+    super.key,
+    required this.tender,
+    this.verdict,
+    this.onTap,
+    this.now,
+  });
+
+  final Tender tender;
+  final Verdict? verdict;
+  final VoidCallback? onTap;
+
+  /// Injected clock for tests; defaults to the current time.
+  final DateTime? now;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final veto = verdict?.rulesResult.vetoes.firstOrNull;
+
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(Space.lg),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      tender.title,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: kFitScoreGap),
+                  FitScoreBadge(score: verdict?.fitScore),
+                ],
+              ),
+              const SizedBox(height: Space.xs),
+              Text(
+                '${tender.buyer} · ${tender.country}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium?.copyWith(color: muted),
+              ),
+              const SizedBox(height: Space.md),
+              Wrap(
+                spacing: Space.sm,
+                runSpacing: Space.sm,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  VerdictChip(verdict: verdict?.verdict, dense: true),
+                  _Meta(
+                    icon: Icons.schedule,
+                    text: deadlineLabel(tender.deadline, now ?? DateTime.now()),
+                  ),
+                  _Meta(icon: Icons.source_outlined, text: _sourceLabel),
+                ],
+              ),
+              if (veto != null) ...[
+                const SizedBox(height: Space.sm),
+                Text(
+                  veto.message,
+                  style: theme.textTheme.bodySmall?.copyWith(color: muted),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String get _sourceLabel => switch (tender.source) {
+    TenderSourceType.ted => 'EU TED',
+    TenderSourceType.worldBank => 'World Bank',
+    TenderSourceType.scan => 'Scanned',
+  };
+}
+
+/// "Closes in 5 days", "Closes today", "Closed", or "Deadline unknown".
+String deadlineLabel(DateTime? deadline, DateTime now) {
+  if (deadline == null) return 'Deadline unknown';
+  final local = deadline.toLocal();
+  final days = DateUtils.dateOnly(local)
+      .difference(DateUtils.dateOnly(now))
+      .inDays;
+  if (local.isBefore(now)) return 'Closed';
+  if (days == 0) return 'Closes today';
+  if (days == 1) return 'Closes tomorrow';
+  if (days <= 14) return 'Closes in $days days';
+  return 'Closes ${DateFormat.yMMMd().format(local)}';
+}
+
+class _Meta extends StatelessWidget {
+  const _Meta({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: Space.xs),
+        Text(
+          text,
+          style: Theme.of(context).textTheme.labelMedium
+              ?.copyWith(color: color),
+        ),
+      ],
+    );
+  }
+}

@@ -1,0 +1,29 @@
+include: package:flutter_lints/flutter.yaml
+
+analyzer:
+  exclude:
+    - build/**
+    - "**/*.g.dart"
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
+  language:
+    strict-casts: true
+    strict-raw-types: true
+  errors:
+    # A missing await on a Future is almost always a bug in this app
+    # (sync, AI calls, Firestore writes).
+    unawaited_futures: warning
+
+linter:
+  rules:
+    - prefer_single_quotes
+    - prefer_final_locals
+    - unawaited_futures
+    - avoid_print
+    - always_declare_return_types
+    - directives_ordering
+    - require_trailing_commas: false
