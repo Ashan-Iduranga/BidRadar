@@ -14,6 +14,7 @@ class Company {
     required this.teamSize,
     required this.ownerUid,
     this.members = const {},
+    this.memberEmails = const {},
   });
 
   final String id;
@@ -31,6 +32,29 @@ class Company {
   /// uid → role. Security rules read this map.
   final Map<String, UserRole> members;
 
+  /// uid → email, for showing the team. Not used by security rules.
+  final Map<String, String> memberEmails;
+
+  UserRole? roleOf(String uid) => members[uid];
+
+  Company copyWith({
+    String? name,
+    String? country,
+    double? annualTurnover,
+    String? currency,
+    int? teamSize,
+  }) => Company(
+    id: id,
+    name: name ?? this.name,
+    country: country ?? this.country,
+    annualTurnover: annualTurnover ?? this.annualTurnover,
+    currency: currency ?? this.currency,
+    teamSize: teamSize ?? this.teamSize,
+    ownerUid: ownerUid,
+    members: members,
+    memberEmails: memberEmails,
+  );
+
   factory Company.fromJson(Map<String, dynamic> j) => Company(
     id: j['id'] as String,
     name: j['name'] as String,
@@ -41,6 +65,9 @@ class Company {
     ownerUid: j['ownerUid'] as String,
     members: ((j['members'] as Map?) ?? const {}).map(
       (k, v) => MapEntry(k as String, UserRole.fromWire(v as String)),
+    ),
+    memberEmails: ((j['memberEmails'] as Map?) ?? const {}).map(
+      (k, v) => MapEntry(k as String, v as String),
     ),
   );
 
@@ -53,6 +80,7 @@ class Company {
     'teamSize': teamSize,
     'ownerUid': ownerUid,
     'members': members.map((k, v) => MapEntry(k, v.wire)),
+    'memberEmails': memberEmails,
   };
 }
 
@@ -111,6 +139,19 @@ class CompanyProfile {
   final List<String> certifications;
   final List<PastContract> pastContracts;
 
+  CompanyProfile copyWith({
+    List<String>? cpvCodes,
+    List<String>? countries,
+    List<String>? certifications,
+    List<PastContract>? pastContracts,
+  }) => CompanyProfile(
+    companyId: companyId,
+    cpvCodes: cpvCodes ?? this.cpvCodes,
+    countries: countries ?? this.countries,
+    certifications: certifications ?? this.certifications,
+    pastContracts: pastContracts ?? this.pastContracts,
+  );
+
   factory CompanyProfile.fromJson(Map<String, dynamic> j) => CompanyProfile(
     companyId: j['companyId'] as String,
     cpvCodes: List<String>.from(j['cpvCodes'] as List),
@@ -127,5 +168,44 @@ class CompanyProfile {
     'countries': countries,
     'certifications': certifications,
     'pastContracts': pastContracts.map((e) => e.toJson()).toList(),
+  };
+}
+
+/// `invites/{email}`: lets the owner add a bid manager. The invited person
+/// signs in with that email and accepts. Email is stored lower case.
+@immutable
+class Invite {
+  const Invite({
+    required this.email,
+    required this.companyId,
+    required this.companyName,
+    required this.invitedBy,
+    required this.createdAt,
+    this.role = UserRole.bidManager,
+  });
+
+  final String email;
+  final String companyId;
+  final String companyName;
+  final String invitedBy;
+  final UserRole role;
+  final DateTime createdAt;
+
+  factory Invite.fromJson(Map<String, dynamic> j) => Invite(
+    email: j['email'] as String,
+    companyId: j['companyId'] as String,
+    companyName: j['companyName'] as String,
+    invitedBy: j['invitedBy'] as String,
+    role: UserRole.fromWire(j['role'] as String),
+    createdAt: DateTime.parse(j['createdAt'] as String),
+  );
+
+  Map<String, dynamic> toJson() => {
+    'email': email,
+    'companyId': companyId,
+    'companyName': companyName,
+    'invitedBy': invitedBy,
+    'role': role.wire,
+    'createdAt': createdAt.toUtc().toIso8601String(),
   };
 }

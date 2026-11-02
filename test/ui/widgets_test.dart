@@ -105,7 +105,7 @@ void main() {
       ),
     );
     expect(find.textContaining('Supply of desktop'), findsOneWidget);
-    expect(find.text('Ministry of Health · LKA'), findsOneWidget);
+    expect(find.text('Ministry of Health · Sri Lanka'), findsOneWidget);
     expect(find.text('No bid'), findsOneWidget);
     expect(find.text('Closed'), findsOneWidget);
     expect(find.text('World Bank'), findsOneWidget);

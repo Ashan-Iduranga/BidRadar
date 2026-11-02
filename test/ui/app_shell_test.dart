@@ -1,14 +1,23 @@
+import 'dart:async';
+
 import 'package:bidradar/app.dart';
 import 'package:bidradar/core/firebase/firebase_bootstrap.dart';
+import 'package:bidradar/core/router/app_router.dart';
+import 'package:bidradar/ui/feed/feed_view_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   Future<void> pumpApp(WidgetTester tester) async {
     await tester.pumpWidget(
       ProviderScope(
-        overrides: [firebaseReadyProvider.overrideWithValue(false)],
+        overrides: [
+          firebaseReadyProvider.overrideWithValue(false),
+          // Widget tests do not open the drift database.
+          cachedTendersProvider.overrideWith((ref) => Stream.value([])),
+        ],
         child: const BidRadarApp(),
       ),
     );
@@ -33,7 +42,7 @@ void main() {
       ('Pipeline', 'No bids in progress'),
       ('Deadlines', 'No upcoming deadlines'),
       ('Insights', 'No results yet'),
-      ('Company', 'No company profile'),
+      ('Company', 'Firebase is not configured'),
       ('Feed', 'No tenders yet'),
     ]) {
       await tester.tap(
@@ -52,7 +61,11 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Approvals'));
+    // The Approvals button is owner-only; open the route directly.
+    unawaited(
+      GoRouter.of(tester.element(find.byType(NavigationBar)))
+          .push(Routes.approvals),
+    );
     await tester.pumpAndSettle();
     expect(find.text('Nothing to approve'), findsOneWidget);
   });
