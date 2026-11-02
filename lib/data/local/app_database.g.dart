@@ -458,10 +458,456 @@ class CachedTendersCompanion extends UpdateCompanion<CachedTender> {
   }
 }
 
+class $SyncRunsTable extends SyncRuns with TableInfo<$SyncRunsTable, SyncRun> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $SyncRunsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+    'id',
+    aliasedName,
+    false,
+    hasAutoIncrement: true,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'PRIMARY KEY AUTOINCREMENT',
+    ),
+  );
+  static const VerificationMeta _ranAtMeta = const VerificationMeta('ranAt');
+  @override
+  late final GeneratedColumn<DateTime> ranAt = GeneratedColumn<DateTime>(
+    'ran_at',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _addedMeta = const VerificationMeta('added');
+  @override
+  late final GeneratedColumn<int> added = GeneratedColumn<int>(
+    'added',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _matchedMeta = const VerificationMeta(
+    'matched',
+  );
+  @override
+  late final GeneratedColumn<int> matched = GeneratedColumn<int>(
+    'matched',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _vetoedMeta = const VerificationMeta('vetoed');
+  @override
+  late final GeneratedColumn<int> vetoed = GeneratedColumn<int>(
+    'vetoed',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _errorsMeta = const VerificationMeta('errors');
+  @override
+  late final GeneratedColumn<String> errors = GeneratedColumn<String>(
+    'errors',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  static const VerificationMeta _backgroundMeta = const VerificationMeta(
+    'background',
+  );
+  @override
+  late final GeneratedColumn<bool> background = GeneratedColumn<bool>(
+    'background',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: true,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("background" IN (0, 1))',
+    ),
+  );
+  @override
+  List<GeneratedColumn> get $columns => [
+    id,
+    ranAt,
+    added,
+    matched,
+    vetoed,
+    errors,
+    background,
+  ];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'sync_runs';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<SyncRun> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('ran_at')) {
+      context.handle(
+        _ranAtMeta,
+        ranAt.isAcceptableOrUnknown(data['ran_at']!, _ranAtMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_ranAtMeta);
+    }
+    if (data.containsKey('added')) {
+      context.handle(
+        _addedMeta,
+        added.isAcceptableOrUnknown(data['added']!, _addedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_addedMeta);
+    }
+    if (data.containsKey('matched')) {
+      context.handle(
+        _matchedMeta,
+        matched.isAcceptableOrUnknown(data['matched']!, _matchedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_matchedMeta);
+    }
+    if (data.containsKey('vetoed')) {
+      context.handle(
+        _vetoedMeta,
+        vetoed.isAcceptableOrUnknown(data['vetoed']!, _vetoedMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_vetoedMeta);
+    }
+    if (data.containsKey('errors')) {
+      context.handle(
+        _errorsMeta,
+        errors.isAcceptableOrUnknown(data['errors']!, _errorsMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_errorsMeta);
+    }
+    if (data.containsKey('background')) {
+      context.handle(
+        _backgroundMeta,
+        background.isAcceptableOrUnknown(data['background']!, _backgroundMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_backgroundMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  SyncRun map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return SyncRun(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}id'],
+      )!,
+      ranAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}ran_at'],
+      )!,
+      added: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}added'],
+      )!,
+      matched: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}matched'],
+      )!,
+      vetoed: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}vetoed'],
+      )!,
+      errors: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}errors'],
+      )!,
+      background: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}background'],
+      )!,
+    );
+  }
+
+  @override
+  $SyncRunsTable createAlias(String alias) {
+    return $SyncRunsTable(attachedDatabase, alias);
+  }
+}
+
+class SyncRun extends DataClass implements Insertable<SyncRun> {
+  final int id;
+  final DateTime ranAt;
+  final int added;
+  final int matched;
+  final int vetoed;
+
+  /// JSON list of error lines.
+  final String errors;
+  final bool background;
+  const SyncRun({
+    required this.id,
+    required this.ranAt,
+    required this.added,
+    required this.matched,
+    required this.vetoed,
+    required this.errors,
+    required this.background,
+  });
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['ran_at'] = Variable<DateTime>(ranAt);
+    map['added'] = Variable<int>(added);
+    map['matched'] = Variable<int>(matched);
+    map['vetoed'] = Variable<int>(vetoed);
+    map['errors'] = Variable<String>(errors);
+    map['background'] = Variable<bool>(background);
+    return map;
+  }
+
+  SyncRunsCompanion toCompanion(bool nullToAbsent) {
+    return SyncRunsCompanion(
+      id: Value(id),
+      ranAt: Value(ranAt),
+      added: Value(added),
+      matched: Value(matched),
+      vetoed: Value(vetoed),
+      errors: Value(errors),
+      background: Value(background),
+    );
+  }
+
+  factory SyncRun.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return SyncRun(
+      id: serializer.fromJson<int>(json['id']),
+      ranAt: serializer.fromJson<DateTime>(json['ranAt']),
+      added: serializer.fromJson<int>(json['added']),
+      matched: serializer.fromJson<int>(json['matched']),
+      vetoed: serializer.fromJson<int>(json['vetoed']),
+      errors: serializer.fromJson<String>(json['errors']),
+      background: serializer.fromJson<bool>(json['background']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'ranAt': serializer.toJson<DateTime>(ranAt),
+      'added': serializer.toJson<int>(added),
+      'matched': serializer.toJson<int>(matched),
+      'vetoed': serializer.toJson<int>(vetoed),
+      'errors': serializer.toJson<String>(errors),
+      'background': serializer.toJson<bool>(background),
+    };
+  }
+
+  SyncRun copyWith({
+    int? id,
+    DateTime? ranAt,
+    int? added,
+    int? matched,
+    int? vetoed,
+    String? errors,
+    bool? background,
+  }) => SyncRun(
+    id: id ?? this.id,
+    ranAt: ranAt ?? this.ranAt,
+    added: added ?? this.added,
+    matched: matched ?? this.matched,
+    vetoed: vetoed ?? this.vetoed,
+    errors: errors ?? this.errors,
+    background: background ?? this.background,
+  );
+  SyncRun copyWithCompanion(SyncRunsCompanion data) {
+    return SyncRun(
+      id: data.id.present ? data.id.value : this.id,
+      ranAt: data.ranAt.present ? data.ranAt.value : this.ranAt,
+      added: data.added.present ? data.added.value : this.added,
+      matched: data.matched.present ? data.matched.value : this.matched,
+      vetoed: data.vetoed.present ? data.vetoed.value : this.vetoed,
+      errors: data.errors.present ? data.errors.value : this.errors,
+      background: data.background.present
+          ? data.background.value
+          : this.background,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncRun(')
+          ..write('id: $id, ')
+          ..write('ranAt: $ranAt, ')
+          ..write('added: $added, ')
+          ..write('matched: $matched, ')
+          ..write('vetoed: $vetoed, ')
+          ..write('errors: $errors, ')
+          ..write('background: $background')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, ranAt, added, matched, vetoed, errors, background);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is SyncRun &&
+          other.id == this.id &&
+          other.ranAt == this.ranAt &&
+          other.added == this.added &&
+          other.matched == this.matched &&
+          other.vetoed == this.vetoed &&
+          other.errors == this.errors &&
+          other.background == this.background);
+}
+
+class SyncRunsCompanion extends UpdateCompanion<SyncRun> {
+  final Value<int> id;
+  final Value<DateTime> ranAt;
+  final Value<int> added;
+  final Value<int> matched;
+  final Value<int> vetoed;
+  final Value<String> errors;
+  final Value<bool> background;
+  const SyncRunsCompanion({
+    this.id = const Value.absent(),
+    this.ranAt = const Value.absent(),
+    this.added = const Value.absent(),
+    this.matched = const Value.absent(),
+    this.vetoed = const Value.absent(),
+    this.errors = const Value.absent(),
+    this.background = const Value.absent(),
+  });
+  SyncRunsCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime ranAt,
+    required int added,
+    required int matched,
+    required int vetoed,
+    required String errors,
+    required bool background,
+  }) : ranAt = Value(ranAt),
+       added = Value(added),
+       matched = Value(matched),
+       vetoed = Value(vetoed),
+       errors = Value(errors),
+       background = Value(background);
+  static Insertable<SyncRun> custom({
+    Expression<int>? id,
+    Expression<DateTime>? ranAt,
+    Expression<int>? added,
+    Expression<int>? matched,
+    Expression<int>? vetoed,
+    Expression<String>? errors,
+    Expression<bool>? background,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (ranAt != null) 'ran_at': ranAt,
+      if (added != null) 'added': added,
+      if (matched != null) 'matched': matched,
+      if (vetoed != null) 'vetoed': vetoed,
+      if (errors != null) 'errors': errors,
+      if (background != null) 'background': background,
+    });
+  }
+
+  SyncRunsCompanion copyWith({
+    Value<int>? id,
+    Value<DateTime>? ranAt,
+    Value<int>? added,
+    Value<int>? matched,
+    Value<int>? vetoed,
+    Value<String>? errors,
+    Value<bool>? background,
+  }) {
+    return SyncRunsCompanion(
+      id: id ?? this.id,
+      ranAt: ranAt ?? this.ranAt,
+      added: added ?? this.added,
+      matched: matched ?? this.matched,
+      vetoed: vetoed ?? this.vetoed,
+      errors: errors ?? this.errors,
+      background: background ?? this.background,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (ranAt.present) {
+      map['ran_at'] = Variable<DateTime>(ranAt.value);
+    }
+    if (added.present) {
+      map['added'] = Variable<int>(added.value);
+    }
+    if (matched.present) {
+      map['matched'] = Variable<int>(matched.value);
+    }
+    if (vetoed.present) {
+      map['vetoed'] = Variable<int>(vetoed.value);
+    }
+    if (errors.present) {
+      map['errors'] = Variable<String>(errors.value);
+    }
+    if (background.present) {
+      map['background'] = Variable<bool>(background.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('SyncRunsCompanion(')
+          ..write('id: $id, ')
+          ..write('ranAt: $ranAt, ')
+          ..write('added: $added, ')
+          ..write('matched: $matched, ')
+          ..write('vetoed: $vetoed, ')
+          ..write('errors: $errors, ')
+          ..write('background: $background')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
   late final $CachedTendersTable cachedTenders = $CachedTendersTable(this);
+  late final $SyncRunsTable syncRuns = $SyncRunsTable(this);
   late final Index idxCachedTendersHash = Index(
     'idx_cached_tenders_hash',
     'CREATE INDEX idx_cached_tenders_hash ON cached_tenders (text_hash)',
@@ -476,6 +922,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   @override
   List<DatabaseSchemaEntity> get allSchemaEntities => [
     cachedTenders,
+    syncRuns,
     idxCachedTendersHash,
     idxCachedTendersDeadline,
   ];
@@ -728,10 +1175,247 @@ typedef $$CachedTendersTableProcessedTableManager =
       CachedTender,
       PrefetchHooks Function()
     >;
+typedef $$SyncRunsTableCreateCompanionBuilder = SyncRunsCompanion Function({
+  Value<int> id,
+  required DateTime ranAt,
+  required int added,
+  required int matched,
+  required int vetoed,
+  required String errors,
+  required bool background,
+});
+typedef $$SyncRunsTableUpdateCompanionBuilder = SyncRunsCompanion Function({
+  Value<int> id,
+  Value<DateTime> ranAt,
+  Value<int> added,
+  Value<int> matched,
+  Value<int> vetoed,
+  Value<String> errors,
+  Value<bool> background,
+});
+
+class $$SyncRunsTableFilterComposer
+    extends Composer<_$AppDatabase, $SyncRunsTable> {
+  $$SyncRunsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get ranAt => $composableBuilder(
+    column: $table.ranAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get added => $composableBuilder(
+    column: $table.added,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get matched => $composableBuilder(
+    column: $table.matched,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get vetoed => $composableBuilder(
+    column: $table.vetoed,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get errors => $composableBuilder(
+    column: $table.errors,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get background => $composableBuilder(
+    column: $table.background,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$SyncRunsTableOrderingComposer
+    extends Composer<_$AppDatabase, $SyncRunsTable> {
+  $$SyncRunsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<DateTime> get ranAt => $composableBuilder(
+    column: $table.ranAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get added => $composableBuilder(
+    column: $table.added,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get matched => $composableBuilder(
+    column: $table.matched,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<int> get vetoed => $composableBuilder(
+    column: $table.vetoed,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get errors => $composableBuilder(
+    column: $table.errors,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get background => $composableBuilder(
+    column: $table.background,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$SyncRunsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $SyncRunsTable> {
+  $$SyncRunsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get ranAt =>
+      $composableBuilder(column: $table.ranAt, builder: (column) => column);
+
+  GeneratedColumn<int> get added =>
+      $composableBuilder(column: $table.added, builder: (column) => column);
+
+  GeneratedColumn<int> get matched =>
+      $composableBuilder(column: $table.matched, builder: (column) => column);
+
+  GeneratedColumn<int> get vetoed =>
+      $composableBuilder(column: $table.vetoed, builder: (column) => column);
+
+  GeneratedColumn<String> get errors =>
+      $composableBuilder(column: $table.errors, builder: (column) => column);
+
+  GeneratedColumn<bool> get background => $composableBuilder(
+    column: $table.background,
+    builder: (column) => column,
+  );
+}
+
+class $$SyncRunsTableTableManager
+    extends
+        RootTableManager<
+          _$AppDatabase,
+          $SyncRunsTable,
+          SyncRun,
+          $$SyncRunsTableFilterComposer,
+          $$SyncRunsTableOrderingComposer,
+          $$SyncRunsTableAnnotationComposer,
+          $$SyncRunsTableCreateCompanionBuilder,
+          $$SyncRunsTableUpdateCompanionBuilder,
+          (SyncRun, BaseReferences<_$AppDatabase, $SyncRunsTable, SyncRun>),
+          SyncRun,
+          PrefetchHooks Function()
+        > {
+  $$SyncRunsTableTableManager(_$AppDatabase db, $SyncRunsTable table)
+    : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$SyncRunsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$SyncRunsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$SyncRunsTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                Value<DateTime> ranAt = const Value.absent(),
+                Value<int> added = const Value.absent(),
+                Value<int> matched = const Value.absent(),
+                Value<int> vetoed = const Value.absent(),
+                Value<String> errors = const Value.absent(),
+                Value<bool> background = const Value.absent(),
+              }) => SyncRunsCompanion(
+                id: id,
+                ranAt: ranAt,
+                added: added,
+                matched: matched,
+                vetoed: vetoed,
+                errors: errors,
+                background: background,
+              ),
+          createCompanionCallback:
+              ({
+                Value<int> id = const Value.absent(),
+                required DateTime ranAt,
+                required int added,
+                required int matched,
+                required int vetoed,
+                required String errors,
+                required bool background,
+              }) => SyncRunsCompanion.insert(
+                id: id,
+                ranAt: ranAt,
+                added: added,
+                matched: matched,
+                vetoed: vetoed,
+                errors: errors,
+                background: background,
+              ),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$SyncRunsTable, SyncRun>(table),
+                  BaseReferences<_$AppDatabase, $SyncRunsTable, SyncRun>(
+                    db,
+                    table,
+                    e,
+                  ),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$SyncRunsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$AppDatabase,
+      $SyncRunsTable,
+      SyncRun,
+      $$SyncRunsTableFilterComposer,
+      $$SyncRunsTableOrderingComposer,
+      $$SyncRunsTableAnnotationComposer,
+      $$SyncRunsTableCreateCompanionBuilder,
+      $$SyncRunsTableUpdateCompanionBuilder,
+      (SyncRun, BaseReferences<_$AppDatabase, $SyncRunsTable, SyncRun>),
+      SyncRun,
+      PrefetchHooks Function()
+    >;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
   $AppDatabaseManager(this._db);
   $$CachedTendersTableTableManager get cachedTenders =>
       $$CachedTendersTableTableManager(_db, _db.cachedTenders);
+  $$SyncRunsTableTableManager get syncRuns =>
+      $$SyncRunsTableTableManager(_db, _db.syncRuns);
 }

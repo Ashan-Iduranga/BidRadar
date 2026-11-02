@@ -25,13 +25,112 @@ class CachedTenders extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [CachedTenders])
+/// One row per FeedSync run, foreground or background. Drives the feed's
+/// "Updated 5 min ago" line and helps debug background runs.
+class SyncRuns extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get ranAt => dateTime()();
+  IntColumn get added => integer()();
+  IntColumn get matched => integer()();
+  IntColumn get vetoed => integer()();
+
+  /// JSON list of error lines.
+  TextColumn get errors => text()();
+  BoolColumn get background => boolean()();
+}
+
+@DriftDatabase(tables: [CachedTenders, SyncRuns])
 class AppDatabase extends _$AppDatabase {
+  /// Shared across isolates so the workmanager isolate and the UI use one
+  /// sqlite file safely.
   AppDatabase([QueryExecutor? executor])
-    : super(executor ?? driftDatabase(name: 'bidradar'));
+    : super(
+        executor ??
+            driftDatabase(
+              name: 'bidradar',
+              native: const DriftNativeOptions(shareAcrossIsolates: true),
+            ),
+      );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (m) => m.createAll(),
+    onUpgrade: (m, from, to) async {
+      if (from < 2) await m.createTable(syncRuns);
+    },
+  );
+}
+
+/// What one FeedSync run did.
+class SyncReport {
+  const SyncReport({
+    required this.ranAt,
+    this.fetched = 0,
+    this.added = 0,
+    this.matched = 0,
+    this.vetoed = 0,
+    this.duplicates = 0,
+    this.errors = const [],
+    this.background = false,
+  });
+
+  final DateTime ranAt;
+  final int fetched;
+
+  /// New tenders stored in the cache.
+  final int added;
+
+  /// New tenders that passed every hard rule.
+  final int matched;
+
+  /// New tenders vetoed by the rules (recorded as NO_BID).
+  final int vetoed;
+  final int duplicates;
+
+  /// One line per failure, e.g. "World Bank: no connection".
+  final List<String> errors;
+  final bool background;
+}
+
+/// Reads and writes [SyncRuns].
+class SyncLog {
+  SyncLog(this._db);
+  final AppDatabase _db;
+
+  Future<void> insert(SyncReport r) => _db
+      .into(_db.syncRuns)
+      .insert(
+        SyncRunsCompanion.insert(
+          ranAt: r.ranAt.toUtc(),
+          added: r.added,
+          matched: r.matched,
+          vetoed: r.vetoed,
+          errors: jsonEncode(r.errors),
+          background: r.background,
+        ),
+      );
+
+  /// The most recent run, or null if sync never ran.
+  Stream<SyncReport?> watchLatest() {
+    final q = _db.select(_db.syncRuns)
+      ..orderBy([(r) => OrderingTerm.desc(r.ranAt)])
+      ..limit(1);
+    return q.watchSingleOrNull().map(
+      (row) => row == null
+          ? null
+          : SyncReport(
+              ranAt: row.ranAt.toUtc(),
+              added: row.added,
+              matched: row.matched,
+              vetoed: row.vetoed,
+              errors: List<String>.from(jsonDecode(row.errors) as List),
+              background: row.background,
+            ),
+    );
+  }
 }
 
 /// Result of writing a batch of fetched tenders into the cache.
@@ -108,6 +207,11 @@ class TenderCache {
   }
 
   Future<List<Tender>> all() => watchAll().first;
+
+  Stream<Tender?> watchById(String id) =>
+      (_db.select(_db.cachedTenders)..where((r) => r.id.equals(id)))
+          .watchSingleOrNull()
+          .map((row) => row == null ? null : _decode(row));
 
   Future<Tender?> byId(String id) async {
     final row = await (_db.select(

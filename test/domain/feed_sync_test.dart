@@ -1,0 +1,196 @@
+import 'dart:async';
+
+import 'package:bidradar/core/net/resilient_http.dart';
+import 'package:bidradar/data/local/app_database.dart';
+import 'package:bidradar/data/models/models.dart';
+import 'package:bidradar/data/repositories/sync_store.dart';
+import 'package:bidradar/data/sources/tender_source.dart';
+import 'package:bidradar/domain/sync/feed_sync.dart';
+import 'package:drift/native.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+final now = DateTime.utc(2026, 11, 2, 12);
+
+const company = Company(
+  id: 'c1',
+  name: 'Lanka Code Works',
+  country: 'LKA',
+  annualTurnover: 850000,
+  currency: 'EUR',
+  teamSize: 28,
+  ownerUid: 'u1',
+);
+
+const profile = CompanyProfile(
+  companyId: 'c1',
+  cpvCodes: ['72000000'],
+  countries: ['LKA'],
+);
+
+Tender tender(
+  String id, {
+  TenderSourceType source = TenderSourceType.ted,
+  String country = 'LKA',
+  List<String> cpv = const ['72200000'],
+  Duration closesIn = const Duration(days: 10),
+}) => Tender(
+  source: source,
+  sourceId: id,
+  title: 'Tender $id',
+  buyer: 'Buyer',
+  country: country,
+  cpvCodes: cpv,
+  deadline: now.add(closesIn),
+  noticeText: 'notice $id',
+  textHash: 'hash-$source-$id',
+  fetchedAt: now,
+);
+
+class FakeSource implements TenderSource {
+  FakeSource(this.type, this.result);
+  @override
+  final TenderSourceType type;
+  FutureOr<List<Tender>> Function() result;
+  int calls = 0;
+
+  @override
+  Future<List<Tender>> search(TenderQuery query) async {
+    calls++;
+    return result();
+  }
+}
+
+class FakeStore implements SyncStore {
+  final tenders = <Tender>[];
+  final verdicts = <Verdict>[];
+  Object? failWith;
+  bool hang = false;
+
+  @override
+  Future<void> saveTenders(List<Tender> t) async {
+    if (hang) await Completer<void>().future;
+    if (failWith != null) throw failWith!;
+    tenders.addAll(t);
+  }
+
+  @override
+  Future<void> recordVerdicts(List<Verdict> v) async {
+    if (hang) await Completer<void>().future;
+    if (failWith != null) throw failWith!;
+    verdicts.addAll(v);
+  }
+}
+
+void main() {
+  late AppDatabase db;
+  late TenderCache cache;
+  late SyncLog log;
+  late FakeStore store;
+  late FakeSource ted;
+  late FakeSource wb;
+
+  FeedSync sync() => FeedSync(
+    sources: [ted, wb],
+    cache: cache,
+    log: log,
+    store: store,
+    clock: () => now,
+    storeTimeout: const Duration(milliseconds: 50),
+  );
+
+  setUp(() {
+    db = AppDatabase(NativeDatabase.memory());
+    cache = TenderCache(db);
+    log = SyncLog(db);
+    store = FakeStore();
+    ted = FakeSource(
+      TenderSourceType.ted,
+      () => [
+        tender('ok'),
+        tender('wrong-country', country: 'ESP'),
+        tender('wrong-sector', cpv: ['45000000']),
+      ],
+    );
+    wb = FakeSource(
+      TenderSourceType.worldBank,
+      () => [tender('wb1', source: TenderSourceType.worldBank, cpv: [])],
+    );
+  });
+  tearDown(() => db.close());
+
+  test('counts added, matched and vetoed tenders', () async {
+    final r = await sync().run(company: company, profile: profile);
+    expect(r.fetched, 4);
+    expect(r.added, 4);
+    expect(r.matched, 2); // "ok" and the World Bank one (sector unchecked)
+    expect(r.vetoed, 2);
+    expect(r.errors, isEmpty);
+    expect(await cache.all(), hasLength(4));
+  });
+
+  test('only vetoed tenders get rules_veto NO_BID audit verdicts', () async {
+    await sync().run(company: company, profile: profile);
+    expect(store.tenders, hasLength(4));
+    expect(store.verdicts.map((v) => v.tenderId).toSet(), {
+      'ted_wrong-country',
+      'ted_wrong-sector',
+    });
+    for (final v in store.verdicts) {
+      expect(v.verdict, VerdictKind.noBid);
+      expect(v.status, VerdictStatus.rulesVeto);
+      expect(v.model, 'rules');
+      expect(v.id, 'rules_c1_${v.tenderId}');
+      expect(v.rulesResult.passed, isFalse);
+    }
+  });
+
+  test(
+    'a second run with the same data adds nothing and writes nothing',
+    () async {
+      await sync().run(company: company, profile: profile);
+      store.tenders.clear();
+      store.verdicts.clear();
+      final r = await sync().run(company: company, profile: profile);
+      expect(r.added, 0);
+      expect(r.matched, 0);
+      expect(store.tenders, isEmpty);
+      expect(store.verdicts, isEmpty, reason: 'verdicts are append-only');
+    },
+  );
+
+  test('one failing source is reported; the other still syncs', () async {
+    wb.result = () => throw NetworkException('down');
+    final r = await sync().run(company: company, profile: profile);
+    expect(r.errors, ['World Bank: no connection']);
+    expect(r.added, 3);
+  });
+
+  test('a Firestore failure keeps the local cache', () async {
+    store.failWith = Exception('permission-denied');
+    final r = await sync().run(company: company, profile: profile);
+    expect(r.errors.single, 'Cloud save: permission denied');
+    expect(await cache.all(), hasLength(4));
+  });
+
+  test('offline Firestore writes time out instead of hanging', () async {
+    store.hang = true;
+    final r = await sync().run(company: company, profile: profile);
+    expect(r.errors.single, 'Cloud save: queued until online');
+    expect(r.added, 4);
+  });
+
+  test('closed tenders are pruned from the cache', () async {
+    await cache.upsertAll([tender('old', closesIn: const Duration(days: -3))]);
+    await sync().run(company: company, profile: profile);
+    expect((await cache.all()).map((t) => t.sourceId), isNot(contains('old')));
+  });
+
+  test('every run is logged for "Updated … ago"', () async {
+    expect(await log.watchLatest().first, isNull);
+    await sync().run(company: company, profile: profile, background: true);
+    final last = await log.watchLatest().first;
+    expect(last!.ranAt, now);
+    expect(last.matched, 2);
+    expect(last.background, isTrue);
+  });
+}

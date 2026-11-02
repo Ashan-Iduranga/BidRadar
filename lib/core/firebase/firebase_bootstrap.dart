@@ -8,7 +8,10 @@ import '../logging/log.dart';
 
 /// Initialises Firebase and App Check. Returns false (instead of crashing)
 /// when Firebase has not been configured yet, so the UI shell still runs.
+/// Also called from the workmanager isolate, where the app may already be
+/// initialised in the same process.
 Future<bool> initFirebase() async {
+  if (Firebase.apps.isNotEmpty) return true;
   try {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,

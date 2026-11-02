@@ -36,7 +36,16 @@ class TenderCard extends StatelessWidget {
     final muted = theme.colorScheme.onSurfaceVariant;
     final result = verdict?.rulesResult ?? rules;
     final veto = result?.vetoes.firstOrNull;
-    final kind = verdict?.verdict ?? (veto != null ? VerdictKind.noBid : null);
+    final warning = veto == null ? result?.warnings.firstOrNull : null;
+    // Without an AI verdict, the rules decide the chip: a veto is NO_BID,
+    // a pass with unchecked facts is REVIEW (always with icon and text).
+    final kind =
+        verdict?.verdict ??
+        (veto != null
+            ? VerdictKind.noBid
+            : warning != null
+            ? VerdictKind.review
+            : null);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -87,23 +96,13 @@ class TenderCard extends StatelessWidget {
                   _Meta(icon: Icons.source_outlined, text: _sourceLabel),
                 ],
               ),
+              if (veto == null && warning != null) ...[
+                const SizedBox(height: Space.sm),
+                _Note(icon: Icons.info_outline, text: warning),
+              ],
               if (veto != null) ...[
                 const SizedBox(height: Space.sm),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.block, size: 16, color: muted),
-                    const SizedBox(width: Space.xs),
-                    Expanded(
-                      child: Text(
-                        veto.message,
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: muted,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                _Note(icon: Icons.block, text: veto.message),
               ],
             ],
           ),
@@ -131,6 +130,31 @@ String deadlineLabel(DateTime? deadline, DateTime now) {
   if (days == 1) return 'Closes tomorrow';
   if (days <= 14) return 'Closes in $days days';
   return 'Closes ${DateFormat.yMMMd().format(local)}';
+}
+
+class _Note extends StatelessWidget {
+  const _Note({required this.icon, required this.text});
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final muted = theme.colorScheme.onSurfaceVariant;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 16, color: muted),
+        const SizedBox(width: Space.xs),
+        Expanded(
+          child: Text(
+            text,
+            style: theme.textTheme.bodySmall?.copyWith(color: muted),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _Meta extends StatelessWidget {

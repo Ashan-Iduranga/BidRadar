@@ -84,4 +84,14 @@ void main() {
     expect(await cache.pruneClosedBefore(DateTime.utc(2026, 10, 1)), 1);
     expect((await cache.all()).map((e) => e.sourceId), ['open', 'unknown']);
   });
+
+  test('watchById emits updates and null after pruning', () async {
+    final titles = cache.watchById('ted_w').map((t) => t?.title);
+    final expectation = expectLater(titles, emitsInOrder([null, 'T', null]));
+    await pumpEventQueue();
+    await cache.upsertAll([t('w', deadline: DateTime.utc(2026, 9, 1))]);
+    await pumpEventQueue();
+    await cache.pruneClosedBefore(DateTime.utc(2026, 10, 1));
+    await expectation;
+  });
 }
