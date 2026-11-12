@@ -72,9 +72,7 @@ void main() {
     expect(find.text('Nothing to approve'), findsOneWidget);
   });
 
-  testWidgets('the avatar opens Profile with the theme switch', (
-    tester,
-  ) async {
+  testWidgets('the avatar opens Profile with the theme switch', (tester) async {
     await pumpApp(tester);
     await tester.tap(find.byTooltip('Open your profile').first);
     await tester.pumpAndSettle();
