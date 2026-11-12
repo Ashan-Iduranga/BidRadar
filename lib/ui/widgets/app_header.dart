@@ -225,13 +225,16 @@ class BrandAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
           Text(
             title,
-            maxLines: 1,
+            // Long company names wrap to a second, smaller line.
+            maxLines: large ? 2 : 1,
             overflow: TextOverflow.ellipsis,
             style:
                 (large
-                        ? theme.textTheme.headlineSmall
+                        ? (title.length > 16
+                              ? theme.textTheme.titleLarge
+                              : theme.textTheme.headlineSmall)
                         : theme.textTheme.titleLarge)
-                    ?.copyWith(color: b.ink),
+                    ?.copyWith(color: b.ink, height: 1.15),
           ),
         ],
       ),

@@ -1,14 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- BidRadar splash: the Azure Mint hero gradient with the radar-arc mark centred. -->
+<!-- BidRadar splash: Ember Slate black with the radar-arc mark centred. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <gradient
-                android:angle="315"
-                android:startColor="#FF0A3D91"
-                android:centerColor="#FF0B5ED7"
-                android:endColor="#FF08705F"
-                android:type="linear" />
+            <solid android:color="#FF0E1011" />
         </shape>
     </item>
     <item>

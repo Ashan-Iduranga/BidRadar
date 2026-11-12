@@ -415,7 +415,7 @@ class _SummaryHero extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'This week · ${_lowerFirst(updated)}',
+                    updated,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.labelLarge?.copyWith(
@@ -462,9 +462,6 @@ class _SummaryHero extends StatelessWidget {
       ),
     );
   }
-
-  static String _lowerFirst(String s) =>
-      s.isEmpty ? s : s[0].toLowerCase() + s.substring(1);
 }
 
 class _Bar extends StatelessWidget {

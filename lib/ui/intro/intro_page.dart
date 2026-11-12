@@ -605,16 +605,20 @@ class _VerdictScene extends StatelessWidget {
             children: [
               ring,
               const SizedBox(width: 14),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const VerdictChip(verdict: VerdictKind.bid),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Fit 82 of 100',
-                    style: theme.textTheme.labelLarge?.copyWith(color: b.ink2),
-                  ),
-                ],
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const VerdictChip(verdict: VerdictKind.bid),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Fit 82 of 100',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: b.ink2,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -878,21 +882,27 @@ class _NextButton extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      AnimatedSize(
-                        duration: Motion.medium,
-                        curve: Motion.emphasized,
-                        child: last
-                            ? Padding(
-                                padding: const EdgeInsets.only(right: 10),
-                                child: Text(
-                                  'Get started',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    color: b.onAction,
-                                    fontWeight: FontWeight.w800,
+                      Flexible(
+                        child: AnimatedSize(
+                          duration: Motion.medium,
+                          curve: Motion.emphasized,
+                          child: last
+                              ? Padding(
+                                  padding: const EdgeInsets.only(right: 10),
+                                  child: Text(
+                                    'Get started',
+                                    maxLines: 1,
+                                    softWrap: false,
+                                    overflow: TextOverflow.fade,
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(
+                                          color: b.onAction,
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                   ),
-                                ),
-                              )
-                            : const SizedBox.shrink(),
+                                )
+                              : const SizedBox.shrink(),
+                        ),
                       ),
                       Icon(Icons.arrow_forward_rounded, color: b.onAction),
                     ],

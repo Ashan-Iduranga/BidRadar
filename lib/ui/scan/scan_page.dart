@@ -10,6 +10,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../domain/scan/scan.dart';
 import '../onboarding/onboarding_page.dart' show parseAmount;
+import '../widgets/app_header.dart';
 import '../widgets/country_picker.dart';
 import '../widgets/state_views.dart';
 import 'scan_view_model.dart';
@@ -89,7 +90,7 @@ class _ScanPageState extends ConsumerState<ScanPage> {
 
     return GradientBackground(
       child: Scaffold(
-        appBar: AppBar(title: const Text('Scan a notice')),
+        appBar: const BrandAppBar(title: 'Scan a notice'),
         body: switch (state) {
           ScanWorking(:final step) => Center(
             child: Column(

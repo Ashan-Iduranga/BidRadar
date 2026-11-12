@@ -10,6 +10,7 @@ import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../onboarding/onboarding_page.dart' show parseAmount;
 import '../session/session_providers.dart';
+import '../widgets/app_header.dart';
 import '../widgets/country_picker.dart';
 import '../widgets/state_views.dart';
 import 'profile_view_model.dart';
@@ -24,7 +25,7 @@ class ProfilePage extends ConsumerWidget {
     if (!ref.watch(firebaseReadyProvider)) {
       return GradientBackground(
         child: Scaffold(
-          appBar: AppBar(title: const Text('Company')),
+          appBar: const BrandAppBar(title: 'Company', large: true),
           body: const EmptyState(
             icon: Icons.cloud_off_outlined,
             title: 'Firebase is not configured',
@@ -41,7 +42,7 @@ class ProfilePage extends ConsumerWidget {
 
     return GradientBackground(
       child: Scaffold(
-        appBar: AppBar(title: const Text('Company')),
+        appBar: const BrandAppBar(title: 'Company', large: true),
         body: (c == null || p == null)
             ? company.hasError
                   ? ErrorState(message: 'Could not load the company.')

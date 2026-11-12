@@ -8,6 +8,7 @@ import '../../data/models/models.dart';
 import '../pipeline/approval_dialog.dart';
 import '../pipeline/pipeline_page.dart' show BidCard;
 import '../pipeline/pipeline_view_model.dart';
+import '../widgets/app_header.dart';
 import '../widgets/state_views.dart';
 
 /// Page 7: the owner approves or rejects bids with a note. The route is
@@ -22,7 +23,7 @@ class ApprovalsPage extends ConsumerWidget {
     if (loadError != null) {
       return GradientBackground(
         child: Scaffold(
-          appBar: AppBar(title: const Text('Approvals')),
+          appBar: const BrandAppBar(title: 'Approvals'),
           body: ErrorState(
             message: 'Could not load bids: $loadError',
             onRetry: () => ref.invalidate(bidsProvider),
@@ -39,7 +40,7 @@ class ApprovalsPage extends ConsumerWidget {
 
     return GradientBackground(
       child: Scaffold(
-        appBar: AppBar(title: const Text('Approvals')),
+        appBar: const BrandAppBar(title: 'Approvals'),
         body: pending.isEmpty && history.isEmpty
             ? const EmptyState(
                 icon: Icons.fact_check_outlined,

@@ -8,6 +8,7 @@ import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../domain/pipeline/bid_workflow.dart';
 import '../session/session_providers.dart';
+import '../widgets/app_header.dart';
 import '../widgets/state_views.dart';
 import '../widgets/tender_card.dart' show deadlineLabel;
 import '../widgets/verdict_chip.dart';
@@ -24,7 +25,7 @@ class BidPage extends ConsumerWidget {
     final bid = ref.watch(bidProvider(bidId));
     return GradientBackground(
       child: Scaffold(
-        appBar: AppBar(title: const Text('Bid')),
+        appBar: const BrandAppBar(title: 'Bid'),
         body: switch (bid) {
           AsyncValue(:final error?) when !bid.hasValue => ErrorState(
             message: '$error',

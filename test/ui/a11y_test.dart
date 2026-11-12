@@ -5,6 +5,7 @@ import 'package:bidradar/data/local/app_database.dart';
 import 'package:bidradar/data/models/models.dart';
 import 'package:bidradar/data/seed/sample_companies.dart';
 import 'package:bidradar/domain/insights/insights.dart';
+import 'package:bidradar/ui/account/account_page.dart';
 import 'package:bidradar/ui/approvals/approvals_page.dart';
 import 'package:bidradar/ui/auth/sign_in_page.dart';
 import 'package:bidradar/ui/deadlines/deadlines_page.dart';
@@ -12,6 +13,7 @@ import 'package:bidradar/ui/feed/feed_page.dart';
 import 'package:bidradar/ui/feed/feed_view_model.dart';
 import 'package:bidradar/ui/insights/insights_page.dart';
 import 'package:bidradar/ui/insights/insights_view_model.dart';
+import 'package:bidradar/ui/intro/intro_page.dart';
 import 'package:bidradar/ui/onboarding/onboarding_page.dart';
 import 'package:bidradar/ui/onboarding/onboarding_view_model.dart';
 import 'package:bidradar/ui/pipeline/bid_page.dart';
@@ -170,6 +172,8 @@ class _FakeOnboarding extends OnboardingViewModel {
 }
 
 final pages = <String, Widget Function()>{
+  'Intro': () => const IntroPage(),
+  'Profile': () => const AccountPage(),
   'Sign in': () => const SignInPage(),
   'Onboarding': () => const OnboardingPage(),
   'Feed': () => const FeedPage(),

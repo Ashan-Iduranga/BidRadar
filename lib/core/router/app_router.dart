@@ -1,3 +1,4 @@
+import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -77,7 +78,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.intro, builder: (_, _) => const IntroPage()),
       GoRoute(
         path: Routes.tour,
-        builder: (_, _) => const IntroPage(replay: true),
+        pageBuilder: (context, state) => _page(
+          context,
+          state,
+          const IntroPage(replay: true),
+          axis: SharedAxisTransitionType.vertical,
+        ),
       ),
       // Sign-in fades in, so the intro's colour reveal hands over smoothly.
       GoRoute(
@@ -114,19 +120,62 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/tender/:id',
-        builder: (_, state) =>
-            TenderDetailPage(tenderId: state.pathParameters['id']!),
+        pageBuilder: (context, state) => _page(
+          context,
+          state,
+          TenderDetailPage(tenderId: state.pathParameters['id']!),
+        ),
       ),
       GoRoute(
         path: '/bid/:id',
-        builder: (_, state) => BidPage(bidId: state.pathParameters['id']!),
+        pageBuilder: (context, state) =>
+            _page(context, state, BidPage(bidId: state.pathParameters['id']!)),
       ),
-      GoRoute(path: Routes.scan, builder: (_, _) => const ScanPage()),
-      GoRoute(path: Routes.approvals, builder: (_, _) => const ApprovalsPage()),
-      GoRoute(path: Routes.account, builder: (_, _) => const AccountPage()),
+      GoRoute(
+        path: Routes.scan,
+        pageBuilder: (context, state) => _page(
+          context,
+          state,
+          const ScanPage(),
+          axis: SharedAxisTransitionType.vertical,
+        ),
+      ),
+      GoRoute(
+        path: Routes.approvals,
+        pageBuilder: (context, state) =>
+            _page(context, state, const ApprovalsPage()),
+      ),
+      GoRoute(
+        path: Routes.account,
+        pageBuilder: (context, state) =>
+            _page(context, state, const AccountPage()),
+      ),
     ],
   );
 });
+
+/// Pushed pages slide in on a shared axis (Material motion), so moving
+/// deeper always reads the same way. Instant when animations are off.
+Page<void> _page(
+  BuildContext context,
+  GoRouterState state,
+  Widget child, {
+  SharedAxisTransitionType axis = SharedAxisTransitionType.horizontal,
+}) => CustomTransitionPage<void>(
+  key: state.pageKey,
+  child: child,
+  transitionDuration: reduceMotion(context) ? Duration.zero : Motion.long,
+  reverseTransitionDuration: reduceMotion(context)
+      ? Duration.zero
+      : Motion.medium,
+  transitionsBuilder: (_, animation, secondary, child) => SharedAxisTransition(
+    animation: animation,
+    secondaryAnimation: secondary,
+    transitionType: axis,
+    fillColor: Colors.transparent,
+    child: child,
+  ),
+);
 
 StatefulShellBranch _branch(String path, Widget page) => StatefulShellBranch(
   routes: [GoRoute(path: path, builder: (_, _) => page)],
