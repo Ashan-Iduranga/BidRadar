@@ -1,10 +1,10 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
+import '../widgets/brand_mark.dart';
 import 'auth_providers.dart';
 
 class SignInPage extends ConsumerStatefulWidget {
@@ -138,21 +138,16 @@ class _SignInPageState extends ConsumerState<SignInPage> {
                               ),
                             ],
                             const SizedBox(height: Space.xl),
-                            FilledButton(
-                              onPressed: busy ? null : _submit,
-                              child: busy
-                                  ? const SizedBox.square(
-                                      dimension: 20,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : Text(
-                                      _creating ? 'Create account' : 'Sign in',
-                                    ),
+                            _SubmitRow(
+                              label: _creating ? 'Create account' : 'Sign in',
+                              busy: busy,
+                              onPressed: _submit,
                             ),
                             const SizedBox(height: Space.sm),
                             TextButton(
+                              style: TextButton.styleFrom(
+                                foregroundColor: context.brand.actionInk,
+                              ),
                               onPressed: busy
                                   ? null
                                   : () =>
@@ -199,7 +194,8 @@ class _SignInPageState extends ConsumerState<SignInPage> {
   }
 }
 
-/// Gradient header with the logo and a greeting that follows the mode.
+/// Black hero with the logo, radar arcs and a greeting that follows the
+/// mode (Ember Slate sign-in artboard).
 class _Hero extends StatelessWidget {
   const _Hero({required this.creating});
   final bool creating;
@@ -207,58 +203,178 @@ class _Hero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return DecoratedBox(
+    final b = context.brand;
+    return Container(
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        gradient: AppTheme.heroGradient(theme.brightness),
-        borderRadius: const BorderRadius.vertical(
-          bottom: Radius.circular(Radii.xl + 4),
-        ),
+        color: b.hero,
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(40)),
       ),
-      child: SafeArea(
-        bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(
-            Space.xl,
-            Space.xl,
-            Space.xl,
-            Space.xxl,
+      child: Stack(
+        children: [
+          Positioned(
+            right: -70,
+            bottom: -70,
+            child: ExcludeSemantics(
+              child: CustomPaint(
+                size: const Size.square(300),
+                painter: _HeroArcsPainter(arc: b.heroAccent, dot: b.accent),
+              ),
+            ),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(28, Space.xl, 28, 40),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const BrandMark(size: 52),
-                  const SizedBox(width: Space.md),
-                  Text(
-                    'BidRadar',
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
+                  Row(
+                    children: [
+                      const BrandMark(size: 44),
+                      const SizedBox(width: Space.md),
+                      Text(
+                        'BidRadar',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          color: b.onHero,
+                        ),
+                      ),
+                    ],
+                  ).entrance(context),
+                  const SizedBox(height: 44),
+                  AnimatedSwitcher(
+                    duration: reduceMotion(context)
+                        ? Duration.zero
+                        : Motion.medium,
+                    child: Text(
+                      creating ? 'Create your\naccount' : 'Welcome\nback',
+                      key: ValueKey(creating),
+                      style: theme.textTheme.displaySmall?.copyWith(
+                        color: b.onHero,
+                        height: 1.05,
+                      ),
                     ),
-                  ),
+                  ).entrance(context, index: 1),
+                  const SizedBox(height: Space.md),
+                  SizedBox(
+                    width: 250,
+                    child: Text(
+                      creating
+                          ? 'Use your work email. You can invite a bid '
+                                'manager later.'
+                          : 'Find public tenders your company can win.',
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: b.heroMuted,
+                        height: 1.5,
+                      ),
+                    ),
+                  ).entrance(context, index: 2),
                 ],
               ),
-              const SizedBox(height: Space.xl),
-              Text(
-                creating ? 'Create your account' : 'Welcome back',
-                style: theme.textTheme.headlineMedium?.copyWith(
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: Space.sm),
-              Text(
-                creating
-                    ? 'Use your work email. You can invite a bid manager later.'
-                    : 'Find public tenders your company can win.',
-                style: theme.textTheme.bodyLarge?.copyWith(
-                  color: AppTheme.heroMuted,
-                ),
-              ),
-            ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeroArcsPainter extends CustomPainter {
+  const _HeroArcsPainter({required this.arc, required this.dot});
+
+  final Color arc;
+  final Color dot;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = Offset(size.width / 2, size.height / 2);
+    for (final (r, a) in [(130.0, .35), (86.0, .65), (42.0, 1.0)]) {
+      canvas.drawArc(
+        Rect.fromCircle(center: c, radius: r),
+        -1.5708,
+        1.5708,
+        false,
+        Paint()
+          ..color = arc.withValues(alpha: a)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 14
+          ..strokeCap = StrokeCap.round,
+      );
+    }
+    canvas.drawCircle(c, 12, Paint()..color = dot);
+  }
+
+  @override
+  bool shouldRepaint(_HeroArcsPainter old) => old.arc != arc || old.dot != dot;
+}
+
+/// "Sign in" in big type with a round orange arrow button.
+class _SubmitRow extends StatelessWidget {
+  const _SubmitRow({
+    required this.label,
+    required this.busy,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool busy;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = context.brand;
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Expanded(
+          child: ExcludeSemantics(
+            child: Text(
+              label,
+              style: theme.textTheme.headlineMedium?.copyWith(color: b.ink),
+            ),
           ),
         ),
-      ),
+        Pressable(
+          haptic: true,
+          child: Tooltip(
+            message: label,
+            child: Semantics(
+              button: true,
+              enabled: !busy,
+              label: label,
+              excludeSemantics: true,
+              child: Material(
+                color: b.action,
+                shape: const CircleBorder(),
+                elevation: 6,
+                shadowColor: b.action.withValues(alpha: .5),
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: busy ? null : onPressed,
+                  child: SizedBox.square(
+                    dimension: 72,
+                    child: Center(
+                      child: busy
+                          ? SizedBox.square(
+                              dimension: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.6,
+                                color: b.onAction,
+                              ),
+                            )
+                          : Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 28,
+                              color: b.onAction,
+                            ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -285,7 +401,7 @@ class _StepBar extends StatelessWidget {
       children: [
         Row(
           children: [
-            seg(scheme.primary),
+            seg(context.brand.action),
             const SizedBox(width: Space.sm),
             seg(scheme.surfaceContainerHighest),
           ],
@@ -300,60 +416,4 @@ class _StepBar extends StatelessWidget {
       ],
     );
   }
-}
-
-/// The BidRadar logo: radar arcs from a corner on an azure-to-teal tile.
-/// Same artwork as the launcher icon.
-class BrandMark extends StatelessWidget {
-  const BrandMark({super.key, this.size = 48});
-  final double size;
-
-  @override
-  Widget build(BuildContext context) => Semantics(
-    label: 'BidRadar logo',
-    image: true,
-    child: CustomPaint(size: Size.square(size), painter: _BrandMarkPainter()),
-  );
-}
-
-class _BrandMarkPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final s = size.width / 108; // the artwork is drawn on a 108 grid
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(30 * s)),
-      Paint()
-        ..shader = const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Brand.azureDeep, Brand.azure, Color(0xFF0A8F78)],
-          stops: [0, .55, 1],
-        ).createShader(Offset.zero & size),
-    );
-    // Each arc starts at the corner dot and bends up to the right, like a
-    // signal spreading out (centre one radius to the right of the dot).
-    final origin = Offset(30 * s, 78 * s);
-    for (final (r, alpha) in [(48.0, .45), (32.0, .75), (16.0, 1.0)]) {
-      canvas.drawArc(
-        Rect.fromCircle(center: Offset((30 + r) * s, 78 * s), radius: r * s),
-        math.pi,
-        math.pi / 2,
-        false,
-        Paint()
-          ..color = Brand.mint.withValues(alpha: alpha)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 7 * s
-          ..strokeCap = StrokeCap.round,
-      );
-    }
-    canvas.drawCircle(origin, 6 * s, Paint()..color = Brand.mint);
-    canvas.drawCircle(
-      Offset(76 * s, 62 * s),
-      6.5 * s,
-      Paint()..color = Colors.white,
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }

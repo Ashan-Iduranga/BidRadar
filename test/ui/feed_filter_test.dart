@@ -91,6 +91,19 @@ void main() {
     expect(out, isNot(contains('wb')));
   });
 
+  test('search matches title or buyer, ignoring case', () {
+    expect(ids(applyFeedFilter(items, const FeedFilter(query: 'SOO'))), [
+      'soon',
+    ]);
+    // Every item's buyer is "B", so a buyer search keeps all eligible ones.
+    expect(
+      applyFeedFilter(items, const FeedFilter(query: ' b ')),
+      hasLength(6),
+    );
+    expect(applyFeedFilter(items, const FeedFilter(query: 'zzz')), isEmpty);
+    expect(const FeedFilter(query: 'x').isDefault, isFalse);
+  });
+
   test('filter state helpers', () {
     const f = FeedFilter();
     expect(f.isDefault, isTrue);

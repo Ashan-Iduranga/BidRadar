@@ -16,15 +16,25 @@ class VerdictChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.statusColors;
     final (bg, fg, icon, label) = switch (verdict) {
-      VerdictKind.bid => (c.bid, c.onBid, Icons.check_circle_outline, 'Bid'),
-      VerdictKind.noBid => (c.noBid, c.onNoBid, Icons.block, 'No bid'),
+      VerdictKind.bid => (
+        c.bid,
+        c.onBid,
+        Icons.check_circle_outline_rounded,
+        'Bid',
+      ),
+      VerdictKind.noBid => (c.noBid, c.onNoBid, Icons.block_rounded, 'No bid'),
       VerdictKind.review => (
         c.review,
         c.onReview,
-        Icons.rate_review_outlined,
+        Icons.manage_search_rounded,
         'Review',
       ),
-      null => (c.neutral, c.onNeutral, Icons.hourglass_empty, 'Pending'),
+      null => (
+        c.neutral,
+        c.onNeutral,
+        Icons.hourglass_empty_rounded,
+        'Pending',
+      ),
     };
 
     return Semantics(
@@ -32,22 +42,25 @@ class VerdictChip extends StatelessWidget {
       excludeSemantics: true,
       child: Container(
         padding: EdgeInsets.symmetric(
-          horizontal: dense ? Space.sm : Space.md,
-          vertical: dense ? 2 : Space.xs,
+          horizontal: dense ? 10 : Space.md,
+          vertical: dense ? 4 : 6,
         ),
         decoration: BoxDecoration(
           color: bg,
-          borderRadius: BorderRadius.circular(Radii.xs),
+          borderRadius: BorderRadius.circular(Radii.pill),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: dense ? 14 : IconSizes.sm, color: fg),
-            const SizedBox(width: Space.xs),
+            const SizedBox(width: 5),
             Text(
               label,
-              style: Theme.of(context).textTheme.labelLarge
-                  ?.copyWith(color: fg, fontWeight: FontWeight.w600),
+              style:
+                  (dense
+                          ? Theme.of(context).textTheme.labelMedium
+                          : Theme.of(context).textTheme.labelLarge)
+                      ?.copyWith(color: fg, fontWeight: FontWeight.w700),
             ),
           ],
         ),

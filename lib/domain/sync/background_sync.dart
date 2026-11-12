@@ -6,6 +6,7 @@ import '../../core/firebase/firebase_bootstrap.dart';
 import '../../core/logging/log.dart';
 import '../../core/net/resilient_http.dart';
 import '../../core/notifications/notification_service.dart';
+import '../../core/settings/settings_keys.dart';
 import '../../data/local/app_database.dart';
 import '../../data/repositories/company_repository.dart';
 import '../../data/repositories/sync_store.dart';
@@ -80,7 +81,10 @@ abstract final class BackgroundSync {
         'added ${report.added}, matched ${report.matched}, '
             'errors ${report.errors}',
       );
-      await NotificationService().showNewTenders(report.matched);
+      // The user can turn this alert off in Profile.
+      if (await newTenderAlertsEnabled()) {
+        await NotificationService().showNewTenders(report.matched);
+      }
       return true;
     } finally {
       http.close();

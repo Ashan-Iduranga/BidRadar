@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/geo/countries.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import 'fit_score_badge.dart';
@@ -51,64 +53,89 @@ class TenderCard extends StatelessWidget {
                   ? VerdictKind.review
                   : null);
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(Space.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    final b = context.brand;
+    return Pressable(
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: b.surface,
+          borderRadius: BorderRadius.circular(Radii.md),
+          boxShadow: b.cardShadow,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(Space.lg),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      tender.title,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _SourceTile(source: tender.source),
+                      const SizedBox(width: Space.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tender.title,
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: b.ink,
+                                height: 1.3,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              tender.country.isEmpty
+                                  ? tender.buyer
+                                  : '${tender.buyer} · '
+                                        '${Countries.nameOf(tender.country)}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: muted,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: kFitScoreGap),
+                      FitScoreBadge(score: verdict?.fitScore),
+                    ],
                   ),
-                  const SizedBox(width: kFitScoreGap),
-                  FitScoreBadge(score: verdict?.fitScore),
+                  const SizedBox(height: Space.md),
+                  Wrap(
+                    spacing: Space.md,
+                    runSpacing: Space.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      VerdictChip(verdict: kind, dense: true),
+                      _Meta(
+                        icon: Icons.schedule_rounded,
+                        text: deadlineLabel(
+                          tender.deadline,
+                          now ?? DateTime.now(),
+                        ),
+                      ),
+                      _Meta(icon: Icons.public_rounded, text: _sourceLabel),
+                    ],
+                  ),
+                  if (veto == null && warning != null) ...[
+                    const SizedBox(height: Space.sm),
+                    _Note(icon: Icons.info_outline_rounded, text: warning),
+                  ],
+                  if (veto != null) ...[
+                    const SizedBox(height: Space.sm),
+                    _Note(icon: Icons.block_rounded, text: veto.message),
+                  ],
                 ],
               ),
-              const SizedBox(height: Space.xs),
-              Text(
-                tender.country.isEmpty
-                    ? tender.buyer
-                    : '${tender.buyer} · ${Countries.nameOf(tender.country)}',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(color: muted),
-              ),
-              const SizedBox(height: Space.md),
-              Wrap(
-                spacing: Space.sm,
-                runSpacing: Space.sm,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  VerdictChip(verdict: kind, dense: true),
-                  _Meta(
-                    icon: Icons.schedule,
-                    text: deadlineLabel(tender.deadline, now ?? DateTime.now()),
-                  ),
-                  _Meta(icon: Icons.source_outlined, text: _sourceLabel),
-                ],
-              ),
-              if (veto == null && warning != null) ...[
-                const SizedBox(height: Space.sm),
-                _Note(icon: Icons.info_outline, text: warning),
-              ],
-              if (veto != null) ...[
-                const SizedBox(height: Space.sm),
-                _Note(icon: Icons.block, text: veto.message),
-              ],
-            ],
+            ),
           ),
         ),
       ),
@@ -120,6 +147,36 @@ class TenderCard extends StatelessWidget {
     TenderSourceType.worldBank => 'World Bank',
     TenderSourceType.scan => 'Scanned',
   };
+}
+
+/// Rounded tile with the source's short name, like the reference list icons.
+class _SourceTile extends StatelessWidget {
+  const _SourceTile({required this.source});
+
+  final TenderSourceType source;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = context.brand;
+    return ExcludeSemantics(
+      child: Container(
+        width: 44,
+        height: 44,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: b.surface2,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: source == TenderSourceType.scan
+            ? Icon(Icons.document_scanner_outlined, size: 20, color: b.ink)
+            : Text(
+                source == TenderSourceType.ted ? 'TED' : 'WB',
+                style: Theme.of(context).textTheme.labelMedium
+                    ?.copyWith(color: b.ink, fontWeight: FontWeight.w800),
+              ),
+      ),
+    );
+  }
 }
 
 /// "Closes in 5 days", "Closes today", "Closed", or "Deadline unknown".

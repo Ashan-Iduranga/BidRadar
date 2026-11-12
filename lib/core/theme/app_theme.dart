@@ -1,29 +1,33 @@
 import 'package:flutter/material.dart';
 
+import 'brand_colors.dart';
 import 'status_colors.dart';
 import 'tokens.dart';
 
-/// Builds the light and dark Material 3 themes for the Azure Mint direction.
+export 'brand_colors.dart';
+
+/// Builds the light and dark Material 3 themes for the Ember Slate direction.
 ///
-/// Scaffolds are transparent: every page sits on a [GradientBackground], so
-/// the soft azure-to-mint wash shows behind app bars, lists and cards.
+/// Scaffolds are transparent: every page sits on a [GradientBackground]
+/// (now a flat grey-blue ground), so cards float on it with soft shadows.
+///
+/// Orange is split in two roles: [BrandColors.action] (#FF5C00) is a FILL with
+/// dark text on it (filled buttons, nav pill), while [ColorScheme.primary] is
+/// the darker #B33F00 so every place Material draws "primary" as text, icon or
+/// border still passes 4.5:1.
 abstract final class AppTheme {
   static ThemeData light() => _build(Brightness.light);
   static ThemeData dark() => _build(Brightness.dark);
 
-  /// Deep azure-to-teal gradient for hero cards and headers. White text and
-  /// [heroMuted] text pass 4.5:1 at every stop.
-  static LinearGradient heroGradient(Brightness b) => LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: b == Brightness.light
-        ? const [Brand.azureDeep, Brand.azure, Brand.teal]
-        : const [Brand.azureDeep, Color(0xFF0B4FB8), Color(0xFF0A6B5D)],
-    stops: const [0, .52, 1],
-  );
+  /// Hero card background. Kept as a gradient for older call sites; Ember
+  /// Slate heroes are a flat colour.
+  static LinearGradient heroGradient(Brightness b) {
+    final c = b == Brightness.light ? BrandColors.light : BrandColors.dark;
+    return LinearGradient(colors: [c.hero, c.hero]);
+  }
 
-  /// Secondary text on the hero gradient.
-  static const Color heroMuted = Color(0xFFDCEBFF);
+  /// Secondary text on the hero card (light mode).
+  static const Color heroMuted = Color(0xFFB9C2C5);
 
   static ColorScheme _scheme(Brightness brightness) {
     final base = ColorScheme.fromSeed(
@@ -32,161 +36,231 @@ abstract final class AppTheme {
     );
     if (brightness == Brightness.light) {
       return base.copyWith(
-        primary: Brand.azure,
+        primary: Brand.emberInk,
         onPrimary: Colors.white,
-        primaryContainer: const Color(0xFFDCEAFF),
-        onPrimaryContainer: Brand.azureDeep,
-        tertiary: Brand.teal,
+        primaryContainer: const Color(0xFFFFE2D1),
+        onPrimaryContainer: const Color(0xFF6B2600),
+        secondary: const Color(0xFF6E5410),
+        onSecondary: Colors.white,
+        secondaryContainer: const Color(0xFFF6E7BC),
+        onSecondaryContainer: const Color(0xFF4A3800),
+        tertiary: const Color(0xFF0B5A3A),
         onTertiary: Colors.white,
-        tertiaryContainer: const Color(0xFFDDF6EA),
+        tertiaryContainer: const Color(0xFFDCF2E8),
         onTertiaryContainer: const Color(0xFF0B5A3A),
-        surface: const Color(0xFFF7FAFF),
-        onSurface: const Color(0xFF0B1F3A),
-        onSurfaceVariant: const Color(0xFF45566E),
-        outline: const Color(0xFF71839C),
-        outlineVariant: const Color(0xFFD3E1F2),
+        surface: Colors.white,
+        onSurface: Brand.ink,
+        onSurfaceVariant: const Color(0xFF4A5458),
+        outline: const Color(0xFF6F7B80),
+        outlineVariant: const Color(0xFFC9D3D6),
         surfaceContainerLowest: Colors.white,
-        surfaceContainerLow: const Color(0xFFF2F7FF),
-        surfaceContainer: const Color(0xFFEAF2FD),
-        surfaceContainerHigh: const Color(0xFFE3EDFB),
-        surfaceContainerHighest: const Color(0xFFDCE7F7),
+        surfaceContainerLow: const Color(0xFFF5F8F9),
+        surfaceContainer: const Color(0xFFEEF2F3),
+        surfaceContainerHigh: const Color(0xFFE6ECEE),
+        surfaceContainerHighest: const Color(0xFFDEE6E8),
+        inverseSurface: Brand.ink,
+        onInverseSurface: Colors.white,
+        inversePrimary: const Color(0xFFFF8A4C),
       );
     }
     return base.copyWith(
-      primary: const Color(0xFF6BB8FF),
-      onPrimary: const Color(0xFF04172F),
-      primaryContainer: const Color(0xFF163A66),
-      onPrimaryContainer: const Color(0xFFCFE5FF),
-      tertiary: const Color(0xFF5FDDA6),
+      primary: const Color(0xFFFF8A4C),
+      onPrimary: Brand.ink,
+      primaryContainer: const Color(0xFF4A2410),
+      onPrimaryContainer: const Color(0xFFFFD3BC),
+      secondary: const Color(0xFFDBB144),
+      onSecondary: Brand.ink,
+      secondaryContainer: const Color(0xFF3D3214),
+      onSecondaryContainer: const Color(0xFFF6E7BC),
+      tertiary: const Color(0xFF7FD3B1),
       onTertiary: const Color(0xFF00311F),
-      tertiaryContainer: const Color(0xFF15402F),
+      tertiaryContainer: const Color(0xFF163D2E),
       onTertiaryContainer: const Color(0xFFA6E3C8),
-      surface: const Color(0xFF0B1A30),
-      onSurface: const Color(0xFFEAF3FF),
-      onSurfaceVariant: const Color(0xFFA3B6D0),
-      outline: const Color(0xFF6F84A3),
-      outlineVariant: const Color(0xFF22385C),
-      surfaceContainerLowest: const Color(0xFF06122A),
-      surfaceContainerLow: const Color(0xFF0F2140),
-      surfaceContainer: const Color(0xFF13274A),
-      surfaceContainerHigh: const Color(0xFF183055),
-      surfaceContainerHighest: const Color(0xFF1E3860),
+      surface: const Color(0xFF181D20),
+      onSurface: const Color(0xFFEEF2F3),
+      onSurfaceVariant: const Color(0xFFA7B2B6),
+      outline: const Color(0xFF7C888D),
+      outlineVariant: const Color(0xFF2E383D),
+      surfaceContainerLowest: const Color(0xFF0E1113),
+      surfaceContainerLow: const Color(0xFF14191B),
+      surfaceContainer: const Color(0xFF1C2225),
+      surfaceContainerHigh: const Color(0xFF222A2E),
+      surfaceContainerHighest: const Color(0xFF2A3337),
+      inverseSurface: const Color(0xFFEEF2F3),
+      onInverseSurface: Brand.ink,
+      inversePrimary: Brand.emberInk,
     );
   }
 
   static ThemeData _build(Brightness brightness) {
     final scheme = _scheme(brightness);
     final isLight = brightness == Brightness.light;
-    final ground = isLight ? _Ground.light : _Ground.dark;
-    // Frosted cards: mostly opaque so text contrast holds on any gradient stop.
-    final cardColor = isLight
-        ? Colors.white.withValues(alpha: .86)
-        : const Color(0xFF112442).withValues(alpha: .86);
-    final cardEdge = isLight
-        ? Colors.white.withValues(alpha: .9)
-        : const Color(0xFF78AAE6).withValues(alpha: .16);
-    final buttonShape = RoundedRectangleBorder(
-      borderRadius: BorderRadius.circular(Radii.sm + 2),
+    final brand = isLight ? BrandColors.light : BrandColors.dark;
+    const pill = StadiumBorder();
+    const buttonText = TextStyle(
+      fontFamily: kFontFamily,
+      fontSize: 16,
+      fontWeight: FontWeight.w700,
     );
-    const buttonText = TextStyle(fontSize: 16, fontWeight: FontWeight.w600);
-    final base = ThemeData(useMaterial3: true, colorScheme: scheme);
+    final base = ThemeData(
+      useMaterial3: true,
+      colorScheme: scheme,
+      fontFamily: kFontFamily,
+    );
     final text = base.textTheme;
 
     return base.copyWith(
       scaffoldBackgroundColor: Colors.transparent,
       canvasColor: scheme.surface,
-      extensions: [isLight ? StatusColors.light : StatusColors.dark],
+      extensions: [isLight ? StatusColors.light : StatusColors.dark, brand],
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.padded,
       textTheme: text.copyWith(
+        displaySmall: text.displaySmall?.copyWith(
+          fontWeight: FontWeight.w800,
+          letterSpacing: -1.2,
+        ),
+        headlineLarge: text.headlineLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+          letterSpacing: -1,
+        ),
         headlineMedium: text.headlineMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.6,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.8,
         ),
         headlineSmall: text.headlineSmall?.copyWith(
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
         ),
         titleLarge: text.titleLarge?.copyWith(
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.3,
         ),
-        titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+        titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        titleSmall: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+        labelLarge: text.labelLarge?.copyWith(fontWeight: FontWeight.w700),
       ),
       appBarTheme: AppBarTheme(
         centerTitle: false,
         elevation: 0,
         scrolledUnderElevation: 0,
         surfaceTintColor: Colors.transparent,
-        // Clear over the gradient; frosted once content scrolls under it.
         backgroundColor: WidgetStateColor.resolveWith(
           (states) => states.contains(WidgetState.scrolledUnder)
-              ? ground.top.withValues(alpha: .94)
+              ? brand.ground.withValues(alpha: .96)
               : Colors.transparent,
         ),
         foregroundColor: scheme.onSurface,
         titleTextStyle: TextStyle(
+          fontFamily: kFontFamily,
           fontSize: 22,
-          fontWeight: FontWeight.w700,
-          letterSpacing: -0.4,
+          fontWeight: FontWeight.w800,
+          letterSpacing: -0.5,
           color: scheme.onSurface,
         ),
       ),
       cardTheme: CardThemeData(
-        elevation: 3,
-        shadowColor: const Color(0xFF103050).withValues(alpha: .22),
+        elevation: isLight ? 2 : 0,
+        shadowColor: brand.shadow,
         surfaceTintColor: Colors.transparent,
         margin: EdgeInsets.zero,
-        color: cardColor,
+        color: brand.surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(Radii.md),
-          side: BorderSide(color: cardEdge),
+          side: isLight ? BorderSide.none : BorderSide(color: brand.line),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          minimumSize: const Size(64, 52),
-          shape: buttonShape,
+          backgroundColor: brand.action,
+          foregroundColor: brand.onAction,
+          disabledBackgroundColor: scheme.onSurface.withValues(alpha: .12),
+          disabledForegroundColor: scheme.onSurface.withValues(alpha: .38),
+          minimumSize: const Size(64, 56),
+          shape: pill,
           textStyle: buttonText,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          minimumSize: const Size(64, 52),
-          shape: buttonShape,
+          foregroundColor: scheme.onSurface,
+          minimumSize: const Size(64, 56),
+          shape: pill,
           textStyle: buttonText,
-          side: BorderSide(color: scheme.outline),
+          side: BorderSide(color: scheme.outline, width: 1.5),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           minimumSize: const Size(48, 48),
-          shape: buttonShape,
+          shape: pill,
           textStyle: buttonText.copyWith(fontSize: 15),
         ),
       ),
+      iconButtonTheme: IconButtonThemeData(
+        style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+      ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
-        backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary,
+        backgroundColor: brand.accent,
+        foregroundColor: brand.onAccent,
         elevation: 4,
+        extendedTextStyle: buttonText,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Radii.lg - 4),
+          borderRadius: BorderRadius.circular(Radii.md - 4),
         ),
       ),
       chipTheme: ChipThemeData(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(Radii.sm - 2),
+        shape: const StadiumBorder(),
+        showCheckmark: false,
+        side: WidgetStateBorderSide.resolveWith(
+          (states) => BorderSide(
+            color: states.contains(WidgetState.selected)
+                ? brand.ink
+                : scheme.outlineVariant,
+            width: 1.5,
+          ),
         ),
-        side: BorderSide(color: scheme.outlineVariant),
         color: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? scheme.primaryContainer
-              : cardColor,
+          (states) =>
+              states.contains(WidgetState.selected) ? brand.ink : brand.surface,
+        ),
+        labelStyle: TextStyle(
+          fontFamily: kFontFamily,
+          fontWeight: FontWeight.w700,
+          fontSize: 14,
+          color: WidgetStateColor.resolveWith(
+            (states) => states.contains(WidgetState.selected)
+                ? brand.surface
+                : brand.ink,
+          ),
+        ),
+        iconTheme: IconThemeData(color: brand.ink2, size: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: ButtonStyle(
+          minimumSize: const WidgetStatePropertyAll(Size(48, 52)),
+          shape: const WidgetStatePropertyAll(StadiumBorder()),
+          textStyle: const WidgetStatePropertyAll(buttonText),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? brand.ink : null,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (s) => s.contains(WidgetState.selected) ? brand.surface : brand.ink,
+          ),
+        ),
+      ),
+      switchTheme: SwitchThemeData(
+        thumbColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? brand.onAction : null,
+        ),
+        trackColor: WidgetStateProperty.resolveWith(
+          (s) => s.contains(WidgetState.selected) ? brand.action : null,
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isLight ? Colors.white : scheme.surfaceContainerLow,
+        fillColor: isLight ? Colors.white : brand.surface2,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(Radii.sm),
         ),
@@ -205,24 +279,56 @@ abstract final class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
-        backgroundColor: isLight
-            ? Colors.white.withValues(alpha: .92)
-            : const Color(0xFF0A182E).withValues(alpha: .94),
+        backgroundColor: brand.nav,
         surfaceTintColor: Colors.transparent,
-        indicatorColor: scheme.primaryContainer,
+        indicatorColor: brand.navActive,
         elevation: 0,
+      ),
+      tabBarTheme: TabBarThemeData(
+        labelColor: scheme.onSurface,
+        unselectedLabelColor: scheme.onSurfaceVariant,
+        indicatorColor: brand.action,
+        labelStyle: buttonText.copyWith(fontSize: 15),
+        unselectedLabelStyle: buttonText.copyWith(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+        ),
+        dividerColor: Colors.transparent,
+      ),
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: scheme.primary,
+        linearTrackColor: brand.surface2,
+        circularTrackColor: Colors.transparent,
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
+        showDragHandle: true,
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(Radii.xl)),
+        ),
       ),
       dialogTheme: DialogThemeData(
         backgroundColor: scheme.surface,
         surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Radii.xl),
+        ),
       ),
-      dividerTheme: DividerThemeData(color: scheme.outlineVariant, space: 1),
+      dividerTheme: DividerThemeData(color: brand.line, space: 1),
+      listTileTheme: ListTileThemeData(
+        iconColor: scheme.onSurfaceVariant,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(Radii.sm),
+        ),
+      ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
+        contentTextStyle: TextStyle(
+          fontFamily: kFontFamily,
+          fontWeight: FontWeight.w600,
+          color: scheme.onInverseSurface,
+        ),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(Radii.sm),
         ),
@@ -231,33 +337,9 @@ abstract final class AppTheme {
   }
 }
 
-/// Page-ground colours: a diagonal wash plus two soft colour glows.
-class _Ground {
-  const _Ground(this.top, this.middle, this.bottom, this.glowA, this.glowB);
-  final Color top;
-  final Color middle;
-  final Color bottom;
-  final Color glowA; // sky, top right
-  final Color glowB; // mint, bottom left
-
-  static const light = _Ground(
-    Color(0xFFE2EEFF),
-    Color(0xFFEEF6FF),
-    Color(0xFFE4F8EF),
-    Color(0x4D2D9CF5),
-    Color(0x423DCB8A),
-  );
-  static const dark = _Ground(
-    Color(0xFF061328),
-    Color(0xFF08182E),
-    Color(0xFF06221F),
-    Color(0x332D9CF5),
-    Color(0x293DCB8A),
-  );
-}
-
-/// The soft azure-to-mint page ground. Wrap each page's [Scaffold] in it
-/// (scaffolds are transparent in [AppTheme]).
+/// The page ground. Wrap each page's [Scaffold] in it (scaffolds are
+/// transparent in [AppTheme]). Ember Slate uses a flat grey-blue ground; the
+/// name is kept from the earlier gradient design so pages need no edits.
 class GradientBackground extends StatelessWidget {
   const GradientBackground({super.key, required this.child});
 
@@ -265,37 +347,11 @@ class GradientBackground extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final g = Theme.of(context).brightness == Brightness.light
-        ? _Ground.light
-        : _Ground.dark;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: const Alignment(-0.6, -1),
-          end: const Alignment(0.6, 1),
-          colors: [g.top, g.middle, g.bottom],
-          stops: const [0, .48, 1],
-        ),
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: const Alignment(0.85, -0.9),
-            radius: 0.9,
-            colors: [g.glowA, g.glowA.withValues(alpha: 0)],
-          ),
-        ),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: RadialGradient(
-              center: const Alignment(-0.9, 0.95),
-              radius: 1.0,
-              colors: [g.glowB, g.glowB.withValues(alpha: 0)],
-            ),
-          ),
-          child: child,
-        ),
-      ),
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      curve: Curves.easeOut,
+      color: context.brand.ground,
+      child: child,
     );
   }
 }

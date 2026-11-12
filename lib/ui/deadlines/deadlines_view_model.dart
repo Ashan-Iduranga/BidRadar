@@ -5,6 +5,7 @@ import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../domain/reminders/reminder_planner.dart';
 import '../pipeline/pipeline_view_model.dart';
+import '../settings/settings_providers.dart';
 
 /// Active bids with a deadline, soonest first.
 final deadlineBidsProvider = Provider<List<Bid>>((ref) {
@@ -16,13 +17,19 @@ final deadlineBidsProvider = Provider<List<Bid>>((ref) {
 });
 
 /// Keeps local reminders in step with the pipeline: whenever bids change,
-/// re-plan and reschedule (only if the plan actually changed).
+/// re-plan and reschedule (only if the plan actually changed). When the user
+/// turns reminders off in Profile, the plan is empty, which cancels them all.
 final reminderSyncProvider = Provider<void>((ref) {
+  final enabled = ref.watch(
+    settingsProvider.select((s) => s.deadlineReminders),
+  );
   String? last;
   ref.listen<AsyncValue<List<Bid>>>(bidsProvider, (_, next) {
     final bids = next.value;
     if (bids == null) return;
-    final plan = ReminderPlanner.plan(bids, DateTime.now());
+    final plan = enabled
+        ? ReminderPlanner.plan(bids, DateTime.now())
+        : const <PlannedReminder>[];
     final signature = plan.map((p) => '${p.id}@${p.at}:${p.title}').join('|');
     if (signature == last) return;
     last = signature;

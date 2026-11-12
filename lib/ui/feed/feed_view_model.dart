@@ -67,6 +67,7 @@ class FeedFilter {
     this.sources = const {},
     this.status = FeedStatus.eligible,
     this.sector,
+    this.query = '',
   });
 
   /// Empty means every source.
@@ -76,17 +77,25 @@ class FeedFilter {
   /// A profile CPV code, or null for any sector.
   final String? sector;
 
+  /// Free-text search over title and buyer (case-insensitive).
+  final String query;
+
   bool get isDefault =>
-      sources.isEmpty && status == FeedStatus.eligible && sector == null;
+      sources.isEmpty &&
+      status == FeedStatus.eligible &&
+      sector == null &&
+      query.trim().isEmpty;
 
   FeedFilter copyWith({
     Set<TenderSourceType>? sources,
     FeedStatus? status,
     String? Function()? sector,
+    String? query,
   }) => FeedFilter(
     sources: sources ?? this.sources,
     status: status ?? this.status,
     sector: sector == null ? this.sector : sector(),
+    query: query ?? this.query,
   );
 }
 
@@ -102,6 +111,7 @@ class FeedFilterNotifier extends Notifier<FeedFilter> {
 
   void setStatus(FeedStatus s) => state = state.copyWith(status: s);
   void setSector(String? cpv) => state = state.copyWith(sector: () => cpv);
+  void setQuery(String q) => state = state.copyWith(query: q);
   void clear() => state = const FeedFilter();
 }
 
@@ -147,6 +157,12 @@ List<FeedItem> applyFeedFilter(List<FeedItem> items, FeedFilter f) {
       FeedStatus.all => true,
     };
     if (!statusOk) return false;
+    final q = f.query.trim().toLowerCase();
+    if (q.isNotEmpty &&
+        !i.tender.title.toLowerCase().contains(q) &&
+        !i.tender.buyer.toLowerCase().contains(q)) {
+      return false;
+    }
     final sector = f.sector;
     if (sector != null &&
         !i.tender.cpvCodes.any((c) => EligibilityRules.cpvOverlap(c, sector))) {
