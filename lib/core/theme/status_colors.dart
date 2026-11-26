@@ -30,40 +30,40 @@ class StatusColors extends ThemeExtension<StatusColors> {
   final Color neutral;
   final Color onNeutral;
 
-  /// Data-mark colours for charts (e.g. the verdict mix bar), checked with
-  /// the dataviz palette validator against each mode's surface:
-  /// light passes every check; dark passes with deutan ΔE 6.9, which is
-  /// allowed because the marks always have gaps, icons and labels.
+  /// Data-mark colours for charts and fit rings: green, violet and red differ
+  /// in lightness as well as hue, and marks always come with gaps, icons and
+  /// labels, so colour is never the only cue.
   final Color bidMark;
   final Color reviewMark;
   final Color noBidMark;
 
   static const light = StatusColors(
-    bid: Color(0xFFD5EFE4),
-    onBid: Color(0xFF0E4F3A),
+    bid: Color(0xFFDCF2E8),
+    onBid: Color(0xFF0B5A3A),
     noBid: Color(0xFFF9DEDC),
     onNoBid: Color(0xFF8C1D18),
-    review: Color(0xFFFBEBC2),
-    onReview: Color(0xFF6B4A00),
-    neutral: Color(0xFFE4E9E6),
-    onNeutral: Color(0xFF34464A),
+    // Review is violet so it never reads as the orange action colour.
+    review: Color(0xFFE6E3FA),
+    onReview: Color(0xFF3F2F9E),
+    neutral: Color(0xFFE9ECEF),
+    onNeutral: Color(0xFF3D464D),
     bidMark: Color(0xFF1F8A70),
-    reviewMark: Color(0xFFE0A526),
-    noBidMark: Color(0xFFB3261E),
+    reviewMark: Color(0xFF5B4BC4),
+    noBidMark: Color(0xFFC2362B),
   );
 
   static const dark = StatusColors(
-    bid: Color(0xFF15402F),
+    bid: Color(0xFF163D2E),
     onBid: Color(0xFFA6E3C8),
-    noBid: Color(0xFF5C1712),
+    noBid: Color(0xFF4E1A16),
     onNoBid: Color(0xFFFFB4AB),
-    review: Color(0xFF4D3800),
-    onReview: Color(0xFFF7D77E),
-    neutral: Color(0xFF2B3437),
-    onNeutral: Color(0xFFC3CDCF),
-    bidMark: Color(0xFF289474),
-    reviewMark: Color(0xFFB98A28),
-    noBidMark: Color(0xFFD24B42),
+    review: Color(0xFF2E2860),
+    onReview: Color(0xFFCFC7FF),
+    neutral: Color(0xFF2A3036),
+    onNeutral: Color(0xFFC7CED4),
+    bidMark: Color(0xFF3FB58F),
+    reviewMark: Color(0xFF9F92F0),
+    noBidMark: Color(0xFFE0675C),
   );
 
   @override

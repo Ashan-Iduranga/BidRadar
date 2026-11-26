@@ -4,9 +4,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/geo/countries.dart';
+import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/seed/sample_companies.dart';
+import '../widgets/app_header.dart';
 import '../widgets/country_picker.dart';
 import '../widgets/state_views.dart';
 import 'onboarding_view_model.dart';
@@ -68,24 +70,27 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(onboardingViewModelProvider);
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Set up your company'),
-        actions: [
-          TextButton(
-            onPressed: _busy ? null : () => FirebaseAuth.instance.signOut(),
-            child: const Text('Sign out'),
-          ),
-        ],
-      ),
-      body: switch (data) {
-        AsyncData(:final value) => _body(context, value),
-        AsyncValue(:final error?) when !data.hasValue => ErrorState(
-          message: 'Could not load setup: $error',
-          onRetry: () => ref.invalidate(onboardingViewModelProvider),
+    return GradientBackground(
+      child: Scaffold(
+        appBar: BrandAppBar(
+          title: 'Set up your company',
+          showAvatar: false,
+          actions: [
+            TextButton(
+              onPressed: _busy ? null : () => FirebaseAuth.instance.signOut(),
+              child: const Text('Sign out'),
+            ),
+          ],
         ),
-        _ => const Center(child: CircularProgressIndicator()),
-      },
+        body: switch (data) {
+          AsyncData(:final value) => _body(context, value),
+          AsyncValue(:final error?) when !data.hasValue => ErrorState(
+            message: 'Could not load setup: $error',
+            onRetry: () => ref.invalidate(onboardingViewModelProvider),
+          ),
+          _ => const Center(child: CircularProgressIndicator()),
+        },
+      ),
     );
   }
 

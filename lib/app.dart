@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/router/app_router.dart';
 import 'core/theme/app_theme.dart';
+import 'ui/settings/settings_providers.dart';
 
 class BidRadarApp extends ConsumerWidget {
   const BidRadarApp({super.key});
@@ -14,7 +15,8 @@ class BidRadarApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(settingsProvider.select((s) => s.themeMode)),
+      themeAnimationDuration: const Duration(milliseconds: 300),
       routerConfig: ref.watch(routerProvider),
     );
   }

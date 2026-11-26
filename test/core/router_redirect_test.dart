@@ -9,7 +9,9 @@ String? go(
   bool signedIn = true,
   Membership membership = Membership.member,
   UserRole? role = UserRole.owner,
+  bool introSeen = true,
 }) => redirectFor(
+  introSeen: introSeen,
   location: location,
   firebaseReady: firebase,
   signedIn: signedIn,
@@ -21,6 +23,21 @@ void main() {
   test('signed-out users go to sign-in', () {
     expect(go(Routes.feed, signedIn: false), Routes.signIn);
     expect(go(Routes.signIn, signedIn: false), isNull);
+  });
+
+  test('first launch shows the intro before sign-in', () {
+    expect(go(Routes.feed, signedIn: false, introSeen: false), Routes.intro);
+    expect(go(Routes.signIn, signedIn: false, introSeen: false), Routes.intro);
+    expect(go(Routes.intro, signedIn: false, introSeen: false), isNull);
+    // Once seen, the intro is skipped.
+    expect(go(Routes.intro, signedIn: false), Routes.signIn);
+  });
+
+  test('signed-in members never land on the intro', () {
+    expect(go(Routes.intro), Routes.feed);
+    expect(go(Routes.intro, introSeen: false), Routes.feed);
+    // The replay from Profile is not a gate.
+    expect(go(Routes.tour), isNull);
   });
 
   test('while the company loads, wait on the loading page', () {

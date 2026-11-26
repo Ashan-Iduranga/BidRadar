@@ -4,6 +4,7 @@ import 'package:bidradar/app.dart';
 import 'package:bidradar/core/firebase/firebase_bootstrap.dart';
 import 'package:bidradar/core/router/app_router.dart';
 import 'package:bidradar/ui/feed/feed_view_model.dart';
+import 'package:bidradar/ui/shell/app_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -31,7 +32,7 @@ void main() {
     await pumpApp(tester);
     expect(find.text('No tenders yet'), findsOneWidget);
     expect(find.textContaining('Firebase not configured'), findsOneWidget);
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byType(FloatingNavBar), findsOneWidget);
   });
 
   testWidgets('all 5 tabs and the 3 pushed pages are reachable', (
@@ -48,7 +49,7 @@ void main() {
     ]) {
       await tester.tap(
         find.descendant(
-          of: find.byType(NavigationBar),
+          of: find.byType(FloatingNavBar),
           matching: find.text(tab),
         ),
       );
@@ -59,15 +60,27 @@ void main() {
     await tester.tap(find.text('Scan notice'));
     await tester.pumpAndSettle();
     expect(find.text('Scan a printed tender'), findsOneWidget);
-    await tester.pageBack();
+    await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();
 
     // The Approvals button is owner-only; open the route directly.
     unawaited(
-      GoRouter.of(tester.element(find.byType(NavigationBar)))
+      GoRouter.of(tester.element(find.byType(FloatingNavBar)))
           .push(Routes.approvals),
     );
     await tester.pumpAndSettle();
     expect(find.text('Nothing to approve'), findsOneWidget);
+  });
+
+  testWidgets('the avatar opens Profile with the theme switch', (tester) async {
+    await pumpApp(tester);
+    await tester.tap(find.byTooltip('Open your profile').first);
+    await tester.pumpAndSettle();
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
+    await tester.tap(find.text('Dark'));
+    await tester.pumpAndSettle();
+    final app = tester.widget<MaterialApp>(find.byType(MaterialApp));
+    expect(app.themeMode, ThemeMode.dark);
   });
 }

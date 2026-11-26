@@ -123,15 +123,22 @@ Conventions:
 
 ### Design system
 
-Material 3 from a single cobalt seed (`#2F4BD8`). It follows the team's `material-3` and `quiet-product` style guides:
-- Borders, not shadows.
-- One accent colour per screen.
-- 4/8 dp spacing.
-- Meaning never shown by colour alone.
+"Ember Slate" direction, on Material 3. Mockups are in the team's Claude Design canvas "BidRadar redesign" (direction A).
+- **Palette:** grey-blue ground `#DEE6E8`, white cards with soft shadows, one black hero card per screen, mustard `#DBB144` accent.
+- **Orange:** `#FF5C00` is used as a fill with dark text on it (buttons, the nav pill). Where orange is text, it is `#B33F00` so it passes 4.5:1.
+- **Font:** Plus Jakarta Sans, bundled in `assets/fonts` (OFL).
+- **Layout:** 4/8 dp spacing; meaning is never shown by colour alone.
+- **Motion:** Material 3 timings in `lib/core/theme/motion.dart`. Every animation is turned off when Android's "Remove animations" is on.
+- **Intro:** a 3-step animated intro before sign-in on first launch, replayable from Profile.
+- **Profile:** opened from the avatar at the top right of every page. It holds the theme (System / Light / Dark) and the notification settings, which are stored on the device.
 
-Verdict colours live in a `StatusColors` theme extension with light and dark variants. Tokens are in `lib/core/theme/`.
+Theme extensions:
+- `StatusColors`: verdict colours; Review is violet so it never reads as the orange action colour.
+- `BrandColors`: ground, hero and nav colours.
 
-Shared widgets: `VerdictChip`, `FitScoreBadge`, `TenderCard`, `EmptyState`, `ErrorState`.
+Tokens are in `lib/core/theme/`.
+
+Shared widgets: `BrandAppBar`, `AvatarButton`, `VerdictChip`, `FitScoreBadge`, `TenderCard`, `EmptyState`, `ErrorState`, and skeleton loaders.
 
 ## Who builds what
 

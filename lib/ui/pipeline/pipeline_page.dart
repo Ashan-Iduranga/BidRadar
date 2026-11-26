@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/router/app_router.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../domain/pipeline/bid_workflow.dart';
+import '../widgets/app_header.dart';
 import '../widgets/fit_score_badge.dart';
+import '../widgets/skeletons.dart';
 import '../widgets/state_views.dart';
 import '../widgets/tender_card.dart' show deadlineLabel;
 import '../widgets/verdict_chip.dart';
@@ -21,41 +26,38 @@ class PipelinePage extends ConsumerWidget {
     final bids = ref.watch(bidsProvider);
     return DefaultTabController(
       length: BidStage.values.length,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Pipeline'),
-          bottom: TabBar(
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
-            tabs: [
-              for (final s in BidStage.values)
-                Tab(
-                  text:
-                      '${BidWorkflow.stageLabel(s)} '
-                      '${bids.value?.where((b) => b.stage == s).length ?? ''}',
-                ),
-            ],
+      child: GradientBackground(
+        child: Scaffold(
+          appBar: BrandAppBar(
+            title: 'Pipeline',
+            large: true,
+            bottom: _StageTabs(
+              counts: {
+                for (final s in BidStage.values)
+                  s: bids.value?.where((b) => b.stage == s).length,
+              },
+            ),
           ),
+          // Check the error first: while Riverpod retries a failed stream the
+          // state is "loading with an error", which would otherwise spin.
+          body: switch (bids) {
+            AsyncValue(:final error?) when !bids.hasValue => ErrorState(
+              message: 'Could not load bids: $error',
+              onRetry: () => ref.invalidate(bidsProvider),
+            ),
+            AsyncData(:final value) => TabBarView(
+              children: [
+                for (final s in BidStage.values)
+                  _StageList(
+                    stage: s,
+                    bids: value.where((b) => b.stage == s).toList()
+                      ..sort(_byDeadline),
+                  ),
+              ],
+            ),
+            _ => const CardListSkeleton(label: 'Loading bids'),
+          },
         ),
-        // Check the error first: while Riverpod retries a failed stream the
-        // state is "loading with an error", which would otherwise spin.
-        body: switch (bids) {
-          AsyncValue(:final error?) when !bids.hasValue => ErrorState(
-            message: 'Could not load bids: $error',
-            onRetry: () => ref.invalidate(bidsProvider),
-          ),
-          AsyncData(:final value) => TabBarView(
-            children: [
-              for (final s in BidStage.values)
-                _StageList(
-                  stage: s,
-                  bids: value.where((b) => b.stage == s).toList()
-                    ..sort(_byDeadline),
-                ),
-            ],
-          ),
-          _ => const Center(child: CircularProgressIndicator()),
-        },
       ),
     );
   }
@@ -89,15 +91,106 @@ class _StageList extends StatelessWidget {
       );
     }
     return ListView.separated(
-      padding: const EdgeInsets.all(Space.gutter),
+      padding: const EdgeInsets.fromLTRB(
+        Space.gutter,
+        Space.md,
+        Space.gutter,
+        Space.xl,
+      ),
       itemCount: bids.length,
-      separatorBuilder: (_, _) => const SizedBox(height: Space.sm),
-      itemBuilder: (_, i) => BidCard(bid: bids[i]),
+      separatorBuilder: (_, _) => const SizedBox(height: Space.md),
+      itemBuilder: (context, i) => BidCard(
+        key: ValueKey(bids[i].id),
+        bid: bids[i],
+      ).entrance(context, index: i),
     );
   }
 }
 
+/// Pill tabs for the 5 stages, each with its count.
+class _StageTabs extends StatelessWidget implements PreferredSizeWidget {
+  const _StageTabs({required this.counts});
+
+  final Map<BidStage, int?> counts;
+
+  @override
+  Size get preferredSize => const Size.fromHeight(60);
+
+  @override
+  Widget build(BuildContext context) {
+    final b = context.brand;
+    final controller = DefaultTabController.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: Space.sm),
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) => TabBar(
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: Space.gutter - 4),
+          labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+          indicator: const BoxDecoration(),
+          dividerHeight: 0,
+          splashBorderRadius: BorderRadius.circular(Radii.pill),
+          onTap: (_) => HapticFeedback.selectionClick(),
+          tabs: [
+            for (final (i, s) in BidStage.values.indexed)
+              _StagePill(
+                label: counts[s] == null
+                    ? BidWorkflow.stageLabel(s)
+                    : '${BidWorkflow.stageLabel(s)} ${counts[s]}',
+                selected: controller.index == i,
+                ink: b.ink,
+                paper: b.surface,
+                line: b.line,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StagePill extends StatelessWidget {
+  const _StagePill({
+    required this.label,
+    required this.selected,
+    required this.ink,
+    required this.paper,
+    required this.line,
+  });
+
+  final String label;
+  final bool selected;
+  final Color ink;
+  final Color paper;
+  final Color line;
+
+  @override
+  Widget build(BuildContext context) => AnimatedContainer(
+    duration: reduceMotion(context) ? Duration.zero : Motion.medium,
+    curve: Motion.emphasized,
+    height: 44,
+    padding: const EdgeInsets.symmetric(horizontal: 16),
+    alignment: Alignment.center,
+    decoration: BoxDecoration(
+      color: selected ? ink : paper,
+      borderRadius: BorderRadius.circular(Radii.pill),
+      border: Border.all(color: selected ? ink : line, width: 1.5),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+        color: selected ? paper : ink,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
+}
+
 /// One bid: title, buyer, deadline, verdict, approval and task progress.
+/// Bids being prepared are filled orange, like the "on" cards in the smart
+/// home reference, so active work stands out.
 class BidCard extends StatelessWidget {
   const BidCard({super.key, required this.bid, this.trailing});
   final Bid bid;
@@ -106,67 +199,131 @@ class BidCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final muted = theme.colorScheme.onSurfaceVariant;
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: () => context.push(Routes.bid(bid.id)),
-        child: Padding(
-          padding: const EdgeInsets.all(Space.lg),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
+    final b = context.brand;
+    final active = bid.stage == BidStage.preparing;
+    final bg = active ? b.action : b.surface;
+    final fg = active ? b.onAction : b.ink;
+    final muted = active ? b.onAction : b.ink2;
+    final progress = bid.tasks.isEmpty
+        ? null
+        : bid.tasksDone / bid.tasks.length;
+    return Pressable(
+      child: Container(
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(Radii.md),
+          boxShadow: b.cardShadow,
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          child: InkWell(
+            onTap: () => context.push(Routes.bid(bid.id)),
+            child: Padding(
+              padding: const EdgeInsets.all(Space.lg),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Text(
-                      bid.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w600,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              bid.title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: fg,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              bid.buyer,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: muted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: Space.md),
+                      FitScoreBadge(
+                        score: bid.fitScore,
+                        textColor: fg,
+                        track: active
+                            ? b.onAction.withValues(alpha: .15)
+                            : null,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: Space.md),
+                  Wrap(
+                    spacing: Space.md,
+                    runSpacing: Space.sm,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      VerdictChip(verdict: bid.verdict, dense: true),
+                      _Meta(
+                        Icons.schedule_rounded,
+                        deadlineLabel(bid.deadline, DateTime.now()),
+                        color: muted,
+                      ),
+                      if (bid.approval == ApprovalState.pending)
+                        _Meta(
+                          Icons.hourglass_top_rounded,
+                          'Awaiting approval',
+                          color: muted,
+                        ),
+                      if (bid.approval == ApprovalState.rejected)
+                        _Meta(
+                          Icons.block_rounded,
+                          'Approval rejected',
+                          color: muted,
+                        ),
+                      if (bid.tasks.isNotEmpty)
+                        _Meta(
+                          Icons.checklist_rounded,
+                          '${bid.tasksDone}/${bid.tasks.length} tasks',
+                          color: muted,
+                        ),
+                    ],
+                  ),
+                  if (progress != null) ...[
+                    const SizedBox(height: Space.md),
+                    ExcludeSemantics(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: TweenAnimationBuilder<double>(
+                          tween: Tween(
+                            begin: reduceMotion(context) ? progress : 0,
+                            end: progress,
+                          ),
+                          duration: Motion.extraLong,
+                          curve: Motion.emphasized,
+                          builder: (_, v, _) => LinearProgressIndicator(
+                            value: v,
+                            minHeight: 6,
+                            color: active ? b.onAction : b.action,
+                            backgroundColor: active
+                                ? b.onAction.withValues(alpha: .18)
+                                : b.surface2,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: Space.md),
-                  FitScoreBadge(score: bid.fitScore),
+                  ],
+                  if (trailing != null) ...[
+                    const SizedBox(height: Space.md),
+                    trailing!,
+                  ],
                 ],
               ),
-              const SizedBox(height: Space.xs),
-              Text(
-                bid.buyer,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(color: muted),
-              ),
-              const SizedBox(height: Space.md),
-              Wrap(
-                spacing: Space.sm,
-                runSpacing: Space.sm,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  VerdictChip(verdict: bid.verdict, dense: true),
-                  _Meta(
-                    Icons.schedule,
-                    deadlineLabel(bid.deadline, DateTime.now()),
-                  ),
-                  if (bid.approval == ApprovalState.pending)
-                    const _Meta(Icons.hourglass_top, 'Awaiting approval'),
-                  if (bid.approval == ApprovalState.rejected)
-                    const _Meta(Icons.block, 'Approval rejected'),
-                  if (bid.tasks.isNotEmpty)
-                    _Meta(
-                      Icons.checklist,
-                      '${bid.tasksDone}/${bid.tasks.length} tasks',
-                    ),
-                ],
-              ),
-              if (trailing != null) ...[
-                const SizedBox(height: Space.md),
-                trailing!,
-              ],
-            ],
+            ),
           ),
         ),
       ),
@@ -175,13 +332,14 @@ class BidCard extends StatelessWidget {
 }
 
 class _Meta extends StatelessWidget {
-  const _Meta(this.icon, this.text);
+  const _Meta(this.icon, this.text, {this.color});
   final IconData icon;
   final String text;
+  final Color? color;
 
   @override
   Widget build(BuildContext context) {
-    final color = Theme.of(context).colorScheme.onSurfaceVariant;
+    final color = this.color ?? Theme.of(context).colorScheme.onSurfaceVariant;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [

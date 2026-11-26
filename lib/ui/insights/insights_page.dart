@@ -2,6 +2,8 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/status_colors.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
@@ -9,6 +11,7 @@ import '../../domain/insights/insights.dart';
 import '../../domain/insights/profile_advisor.dart';
 import '../pipeline/pipeline_view_model.dart';
 import '../session/session_providers.dart';
+import '../widgets/app_header.dart';
 import '../widgets/state_views.dart';
 import 'insights_view_model.dart';
 
@@ -22,155 +25,247 @@ class InsightsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loadError = ref.watch(bidsProvider).error;
     if (loadError != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Insights')),
-        body: ErrorState(
-          message: 'Could not load bids: $loadError',
-          onRetry: () => ref.invalidate(bidsProvider),
+      return GradientBackground(
+        child: Scaffold(
+          appBar: const BrandAppBar(title: 'Insights', large: true),
+          body: ErrorState(
+            message: 'Could not load bids: $loadError',
+            onRetry: () => ref.invalidate(bidsProvider),
+          ),
         ),
       );
     }
     final s = ref.watch(insightsProvider);
     final isOwner = ref.watch(currentRoleProvider) == UserRole.owner;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Insights')),
-      body: s.judged == 0 && s.decided == 0 && s.open == 0
-          ? const EmptyState(
-              icon: Icons.insights_outlined,
-              title: 'No results yet',
-              message:
-                  'Insights appear once tenders are judged and bids have '
-                  'outcomes. Mark bids as won or lost in the pipeline.',
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(
-                Space.gutter,
-                Space.sm,
-                Space.gutter,
-                Space.xxl,
-              ),
-              children: [
-                _StatRow(stats: s),
-                if (s.judged > 0) ...[
-                  const _Heading(
-                    'AI verdicts',
-                    'Every tender the bid agent has judged.',
-                  ),
-                  _VerdictMix(mix: s.verdictMix, total: s.judged),
-                ],
-                if (s.fitBands.any((b) => b > 0)) ...[
-                  const _Heading(
-                    'Fit scores',
-                    'How well judged tenders match your profile.',
-                  ),
-                  _FitChart(bands: s.fitBands),
-                ],
-                const _Heading(
-                  'Why bids were lost',
-                  'Reasons recorded when bids were marked lost.',
+    return GradientBackground(
+      child: Scaffold(
+        appBar: const BrandAppBar(title: 'Insights', large: true),
+        body: s.judged == 0 && s.decided == 0 && s.open == 0
+            ? const EmptyState(
+                icon: Icons.insights_outlined,
+                title: 'No results yet',
+                message:
+                    'Insights appear once tenders are judged and bids have '
+                    'outcomes. Mark bids as won or lost in the pipeline.',
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.gutter,
+                  Space.sm,
+                  Space.gutter,
+                  Space.xxl,
                 ),
-                if (s.lossReasons.isEmpty)
-                  const _Muted('No lost bids yet.')
-                else
-                  _RankedBars(items: s.lossReasons, unit: _Unit.count),
-                if (s.topBuyers.isNotEmpty) ...[
+                children: [
+                  _StatRow(stats: s).entrance(context),
+                  if (s.judged > 0) ...[
+                    const _Heading(
+                      'AI verdicts',
+                      'Every tender the bid agent has judged.',
+                    ),
+                    _Panel(
+                      child: _VerdictMix(mix: s.verdictMix, total: s.judged),
+                    ),
+                  ],
+                  if (s.fitBands.any((b) => b > 0)) ...[
+                    const _Heading(
+                      'Fit scores',
+                      'How well judged tenders match your profile.',
+                    ),
+                    _Panel(child: _FitChart(bands: s.fitBands)),
+                  ],
                   const _Heading(
-                    'Best-fitting buyers',
-                    'Average AI fit score of their tenders.',
+                    'Why bids were lost',
+                    'Reasons recorded when bids were marked lost.',
                   ),
-                  _RankedBars(items: s.topBuyers, unit: _Unit.fit),
+                  if (s.lossReasons.isEmpty)
+                    const _Muted('No lost bids yet.')
+                  else
+                    _Panel(
+                      child: _RankedBars(
+                        items: s.lossReasons,
+                        unit: _Unit.count,
+                      ),
+                    ),
+                  if (s.topBuyers.isNotEmpty) ...[
+                    const _Heading(
+                      'Best-fitting buyers',
+                      'Average AI fit score of their tenders.',
+                    ),
+                    _Panel(
+                      child: _RankedBars(items: s.topBuyers, unit: _Unit.fit),
+                    ),
+                  ],
+                  if (s.topSectors.isNotEmpty) ...[
+                    const _Heading(
+                      'Best-fitting sectors',
+                      'Average AI fit score by CPV division.',
+                    ),
+                    _Panel(
+                      child: _RankedBars(items: s.topSectors, unit: _Unit.fit),
+                    ),
+                  ],
+                  if (s.lost > 0) _Advisor(isOwner: isOwner),
                 ],
-                if (s.topSectors.isNotEmpty) ...[
-                  const _Heading(
-                    'Best-fitting sectors',
-                    'Average AI fit score by CPV division.',
-                  ),
-                  _RankedBars(items: s.topSectors, unit: _Unit.fit),
-                ],
-                if (s.lost > 0) _Advisor(isOwner: isOwner),
-              ],
-            ),
+              ),
+      ),
     );
   }
 }
 
+/// The black hero card: win rate, open bids and AI agreement as rings.
 class _StatRow extends StatelessWidget {
   const _StatRow({required this.stats});
   final InsightsStats stats;
 
   @override
   Widget build(BuildContext context) {
+    final b = context.brand;
     String pct(double? v) => v == null ? '–' : '${(v * 100).round()}%';
-    return Row(
-      children: [
-        Expanded(
-          child: _Stat(
-            value: pct(stats.winRate),
-            label: 'Win rate',
-            detail: stats.decided == 0
-                ? 'No outcomes yet'
-                : '${stats.won} won of ${stats.decided}',
+    final open = stats.open + stats.decided == 0
+        ? null
+        : stats.open / (stats.open + stats.decided);
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+      decoration: BoxDecoration(
+        color: b.hero,
+        borderRadius: BorderRadius.circular(Radii.lg),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: _Stat(
+              value: pct(stats.winRate),
+              ring: stats.winRate,
+              color: b.heroAccent,
+              label: 'Win rate',
+              detail: stats.decided == 0
+                  ? 'No outcomes yet'
+                  : '${stats.won} won of ${stats.decided}',
+            ),
           ),
-        ),
-        const SizedBox(width: Space.sm),
-        Expanded(
-          child: _Stat(
-            value: '${stats.open}',
-            label: 'Open bids',
-            detail: 'In the pipeline',
+          Expanded(
+            child: _Stat(
+              value: '${stats.open}',
+              ring: open,
+              color: b.accent,
+              label: 'Open bids',
+              detail: 'In the pipeline',
+            ),
           ),
-        ),
-        const SizedBox(width: Space.sm),
-        Expanded(
-          child: _Stat(
-            value: pct(stats.agreement),
-            label: 'AI agreed',
-            detail: stats.judgedDecided == 0
-                ? 'Needs outcomes'
-                : '${stats.agreed} of ${stats.judgedDecided} outcomes',
+          Expanded(
+            child: _Stat(
+              value: pct(stats.agreement),
+              ring: stats.agreement,
+              color: b.onHero,
+              label: 'AI agreed',
+              detail: stats.judgedDecided == 0
+                  ? 'Needs outcomes'
+                  : '${stats.agreed} of ${stats.judgedDecided} outcomes',
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.value, required this.label, required this.detail});
+  const _Stat({
+    required this.value,
+    required this.ring,
+    required this.color,
+    required this.label,
+    required this.detail,
+  });
   final String value;
+  final double? ring;
+  final Color color;
   final String label;
   final String detail;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.all(Space.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(label, style: theme.textTheme.labelMedium),
-            const SizedBox(height: Space.xs),
-            Text(
-              value,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-                fontFeatures: const [FontFeature.tabularFigures()],
-              ),
+    final b = context.brand;
+    final target = ring ?? 0;
+    return Semantics(
+      label: '$label $value. $detail',
+      excludeSemantics: true,
+      child: Column(
+        children: [
+          SizedBox.square(
+            dimension: 72,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(
+                    begin: reduceMotion(context) ? target : 0,
+                    end: target,
+                  ),
+                  duration: const Duration(milliseconds: 1000),
+                  curve: Motion.emphasized,
+                  builder: (_, v, _) => CircularProgressIndicator(
+                    value: v,
+                    strokeWidth: 7,
+                    strokeCap: StrokeCap.round,
+                    color: color,
+                    backgroundColor: b.heroTrack,
+                    constraints: BoxConstraints.tight(const Size.square(72)),
+                  ),
+                ),
+                Text(
+                  value,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: b.onHero,
+                    fontWeight: FontWeight.w800,
+                    fontFeatures: const [FontFeature.tabularFigures()],
+                  ),
+                ),
+              ],
             ),
-            Text(
-              detail,
-              maxLines: 2,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
+          ),
+          const SizedBox(height: Space.sm),
+          Text(
+            label,
+            style: theme.textTheme.labelLarge?.copyWith(
+              color: b.onHero,
+              fontWeight: FontWeight.w800,
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            detail,
+            maxLines: 2,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.labelSmall?.copyWith(color: b.heroMuted),
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// White rounded card around a chart.
+class _Panel extends StatelessWidget {
+  const _Panel({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = context.brand;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(Space.lg),
+      decoration: BoxDecoration(
+        color: b.surface,
+        borderRadius: BorderRadius.circular(Radii.md),
+        boxShadow: b.cardShadow,
+      ),
+      child: child,
     );
   }
 }
@@ -319,10 +414,10 @@ class _FitChart extends StatelessWidget {
                   barRods: [
                     BarChartRodData(
                       toY: bands[i].toDouble(),
-                      color: scheme.primary,
+                      color: context.brand.action,
                       width: 28,
                       borderRadius: const BorderRadius.vertical(
-                        top: Radius.circular(4),
+                        top: Radius.circular(8),
                       ),
                     ),
                   ],
@@ -387,8 +482,8 @@ class _RankedBars extends StatelessWidget {
                   child: LinearProgressIndicator(
                     value: max == 0 ? 0 : (i.value / max).clamp(0, 1),
                     minHeight: 8,
-                    color: scheme.primary,
-                    backgroundColor: scheme.surfaceContainerHighest,
+                    color: context.brand.action,
+                    backgroundColor: context.brand.surface2,
                   ),
                 ),
               ],

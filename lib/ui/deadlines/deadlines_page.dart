@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/theme/app_theme.dart';
+import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../pipeline/pipeline_page.dart' show BidCard;
 import '../pipeline/pipeline_view_model.dart';
+import '../widgets/app_header.dart';
+import '../widgets/skeletons.dart';
 import '../widgets/state_views.dart';
 import 'deadlines_view_model.dart';
 
@@ -18,14 +22,17 @@ class DeadlinesPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final loadError = ref.watch(bidsProvider).error;
     if (loadError != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Deadlines')),
-        body: ErrorState(
-          message: 'Could not load bids: $loadError',
-          onRetry: () => ref.invalidate(bidsProvider),
+      return GradientBackground(
+        child: Scaffold(
+          appBar: const BrandAppBar(title: 'Deadlines', large: true),
+          body: ErrorState(
+            message: 'Could not load bids: $loadError',
+            onRetry: () => ref.invalidate(bidsProvider),
+          ),
         ),
       );
     }
+    final loading = !ref.watch(bidsProvider).hasValue;
     final bids = ref.watch(deadlineBidsProvider);
     final cal = ref.watch(calendarProvider);
     final theme = Theme.of(context);
@@ -35,63 +42,82 @@ class DeadlinesPage extends ConsumerWidget {
               .where((b) => DateUtils.isSameDay(b.deadline!.toLocal(), cal.day))
               .toList();
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Deadlines')),
-      body: bids.isEmpty
-          ? const EmptyState(
-              icon: Icons.event_outlined,
-              title: 'No upcoming deadlines',
-              message:
-                  'Watch a tender to track its deadline. BidRadar reminds '
-                  'you 7, 3 and 1 days before, and sends a digest on Mondays.',
-            )
-          : ListView(
-              padding: const EdgeInsets.fromLTRB(
-                Space.gutter,
-                Space.sm,
-                Space.gutter,
-                Space.xxl,
+    return GradientBackground(
+      child: Scaffold(
+        appBar: const BrandAppBar(title: 'Deadlines', large: true),
+        body: loading
+            ? const CardListSkeleton(label: 'Loading deadlines')
+            : bids.isEmpty
+            ? const EmptyState(
+                icon: Icons.event_outlined,
+                title: 'No upcoming deadlines',
+                message:
+                    'Watch a tender to track its deadline. BidRadar reminds '
+                    'you 7, 3 and 1 days before, and sends a digest on Mondays.',
+              )
+            : ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  Space.gutter,
+                  Space.sm,
+                  Space.gutter,
+                  Space.xxl,
+                ),
+                children: [
+                  _MonthGrid(bids: bids, state: cal).entrance(context),
+                  const SizedBox(height: Space.md),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: context.brand.surface,
+                      borderRadius: BorderRadius.circular(Radii.pill),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.notifications_active_outlined,
+                          size: IconSizes.sm,
+                          color: context.brand.actionInk,
+                        ),
+                        const SizedBox(width: Space.sm),
+                        Expanded(
+                          child: Text(
+                            'Reminders 7, 3 and 1 days before, at 9:00. '
+                            'Weekly digest on Mondays.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: context.brand.ink,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).entrance(context, index: 1),
+                  const SizedBox(height: Space.lg),
+                  Text(
+                    cal.day == null
+                        ? 'All upcoming'
+                        : DateFormat.yMMMMEEEEd().format(cal.day!),
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: Space.sm),
+                  if (shown.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: Space.lg),
+                      child: Text('No deadlines on this day.'),
+                    ),
+                  for (final (i, b) in shown.indexed)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: Space.md),
+                      child: BidCard(
+                        key: ValueKey(b.id),
+                        bid: b,
+                      ).entrance(context, index: i + 2),
+                    ),
+                ],
               ),
-              children: [
-                _MonthGrid(bids: bids, state: cal),
-                const SizedBox(height: Space.md),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.notifications_active_outlined,
-                      size: IconSizes.sm,
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                    const SizedBox(width: Space.sm),
-                    Expanded(
-                      child: Text(
-                        'Reminders 7, 3 and 1 days before, at 9:00. '
-                        'Weekly digest on Mondays.',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: Space.lg),
-                Text(
-                  cal.day == null
-                      ? 'All upcoming'
-                      : DateFormat.yMMMMEEEEd().format(cal.day!),
-                  style: theme.textTheme.titleMedium,
-                ),
-                const SizedBox(height: Space.sm),
-                if (shown.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: Space.lg),
-                    child: Text('No deadlines on this day.'),
-                  ),
-                for (final b in shown)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: Space.sm),
-                    child: BidCard(bid: b),
-                  ),
-              ],
-            ),
+      ),
     );
   }
 }
@@ -208,7 +234,7 @@ class _DayCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    final b = context.brand;
     final label = DateFormat.MMMd().format(date);
     return Semantics(
       button: true,
@@ -220,13 +246,15 @@ class _DayCell extends StatelessWidget {
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: reduceMotion(context) ? Duration.zero : Motion.medium,
+          curve: Motion.emphasized,
           margin: const EdgeInsets.all(2),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: selected ? scheme.primary : null,
+            color: selected ? b.ink : null,
             border: today && !selected
-                ? Border.all(color: scheme.primary)
+                ? Border.all(color: b.action, width: 2)
                 : null,
           ),
           child: Column(
@@ -235,8 +263,8 @@ class _DayCell extends StatelessWidget {
               Text(
                 '${date.day}',
                 style: TextStyle(
-                  color: selected ? scheme.onPrimary : null,
-                  fontWeight: count > 0 ? FontWeight.w700 : null,
+                  color: selected ? b.surface : b.ink,
+                  fontWeight: count > 0 ? FontWeight.w800 : FontWeight.w500,
                 ),
               ),
               if (count > 0)
@@ -246,7 +274,7 @@ class _DayCell extends StatelessWidget {
                   margin: const EdgeInsets.only(top: 2),
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: selected ? scheme.onPrimary : scheme.primary,
+                    color: selected ? b.surface : b.action,
                   ),
                 ),
             ],
