@@ -9,11 +9,12 @@ Tender t(
   DateTime? deadline,
   TenderSourceType source = TenderSourceType.ted,
   String title = 'T',
+  String buyer = 'B',
 }) => Tender(
   source: source,
   sourceId: id,
   title: title,
-  buyer: 'B',
+  buyer: buyer,
   country: 'LKA',
   cpvCodes: const ['72000000'],
   deadline: deadline,
@@ -54,6 +55,38 @@ void main() {
     ]);
     expect(r.duplicates.map((e) => e.id), ['worldbank_X9']);
     expect(await cache.all(), hasLength(1));
+  });
+
+  group('a TED change notice (new number, same text)', () {
+    final d1 = DateTime.utc(2026, 12, 1, 10);
+    final d2 = DateTime.utc(2026, 12, 15, 10);
+
+    test('moves the cached deadline when it extends it', () async {
+      await cache.upsertAll([t('1', hash: 'same', deadline: d1)]);
+      final r = await cache.upsertAll([
+        t('2', hash: 'same', deadline: d2), // newest first, as TED sorts
+        t('1', hash: 'same', deadline: d1),
+      ]);
+      expect(r.added, isEmpty);
+      expect(r.duplicates.map((e) => e.id), ['ted_2']);
+      final all = await cache.all();
+      expect(all.map((e) => e.id), ['ted_1'], reason: 'still one tender');
+      expect(all.single.deadline, d2);
+    });
+
+    test('an older or earlier twin does not move it back', () async {
+      await cache.upsertAll([t('2', hash: 'same', deadline: d2)]);
+      await cache.upsertAll([t('1', hash: 'same', deadline: d1)]);
+      expect((await cache.byId('ted_2'))!.deadline, d2);
+    });
+
+    test('another buyer with the same text changes nothing', () async {
+      await cache.upsertAll([t('1', hash: 'same', deadline: d1)]);
+      await cache.upsertAll([
+        t('2', hash: 'same', deadline: d2, buyer: 'Other council'),
+      ]);
+      expect((await cache.byId('ted_1'))!.deadline, d1);
+    });
   });
 
   test('duplicates inside one batch are caught too', () async {

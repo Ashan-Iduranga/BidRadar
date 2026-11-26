@@ -230,12 +230,51 @@ class TenderCache {
         seenHashes[t.textHash] = t.id;
         await _db.into(_db.cachedTenders).insertOnConflictUpdate(_companion(t));
       }
+      // After every row is written, so a re-fetched original cannot undo it.
+      for (final d in duplicates) {
+        final refreshed = await _takeLaterDeadline(d);
+        if (refreshed != null) updated.add(refreshed);
+      }
       return CacheWriteResult(
         added: added,
         updated: updated,
         duplicates: duplicates,
       );
     });
+  }
+
+  /// A change notice (TED publishes one under a new number, usually with
+  /// the same text) is a duplicate by text, but may move the deadline. When
+  /// [dup] has the same source and buyer as its stored twin and a later
+  /// deadline, the twin takes that deadline and the newer links. The later
+  /// deadline is the one still open, for an extension or a new round.
+  Future<Tender?> _takeLaterDeadline(Tender dup) async {
+    final newDeadline = dup.deadline;
+    if (newDeadline == null) return null;
+    final row =
+        await (_db.select(_db.cachedTenders)
+              ..where((r) => r.textHash.equals(dup.textHash))
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) return null;
+    final twin = _decode(row);
+    if (twin.id == dup.id ||
+        twin.source != dup.source ||
+        twin.buyer != dup.buyer) {
+      return null;
+    }
+    final old = twin.deadline;
+    if (old != null && !newDeadline.isAfter(old)) return null;
+    final merged = Tender.fromJson({
+      ...twin.toJson(),
+      'deadline': newDeadline.toUtc().toIso8601String(),
+      'url': dup.url,
+      'documentUrls': dup.documentUrls,
+    });
+    await _db
+        .into(_db.cachedTenders)
+        .insertOnConflictUpdate(_companion(merged));
+    return merged;
   }
 
   /// Cached tenders, soonest deadline first; unknown deadlines last.
