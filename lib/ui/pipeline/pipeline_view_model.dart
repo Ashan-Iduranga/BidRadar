@@ -51,21 +51,20 @@ class BidActions extends Notifier<void> {
     if (companyId == null || uid == null) {
       return Future.value('Sign in first.');
     }
-    return _save(
-      BidWorkflow.watch(
-        companyId: companyId,
-        uid: uid,
-        tender: t,
-        verdict: v,
-        now: _now,
-      ),
+    final bid = BidWorkflow.watch(
+      companyId: companyId,
+      uid: uid,
+      tender: t,
+      verdict: v,
+      now: _now,
     );
+    return _run(() => ref.read(bidRepositoryProvider).create(bid));
   }
 
   Future<String?> requestApproval(Bid b) {
     final uid = _uid;
     if (uid == null) return Future.value('Sign in first.');
-    return _save(BidWorkflow.requestApproval(b, uid, _now));
+    return _change(b, BidWorkflow.requestApproval(b, uid, _now));
   }
 
   Future<String?> decide(
@@ -79,28 +78,40 @@ class BidActions extends Notifier<void> {
     if (!BidWorkflow.canDecide(b, ref.read(currentRoleProvider))) {
       return 'Only the owner can approve bids.';
     }
-    final r = BidWorkflow.decide(
-      bid: b,
-      decision: decision,
-      ownerUid: uid,
-      note: note,
-      now: _now,
-      verdict: verdict ?? await _verdictFor(b),
-    );
+    final v = verdict ?? await _verdictFor(b);
+    final now = _now;
+    // Decided on the latest copy, inside a transaction: if the other phone
+    // changed the bid since this screen loaded, the decision still applies
+    // to what is really there, or it is refused.
     return _run(
-      () => ref.read(bidRepositoryProvider).decide(r.bid, r.approval),
+      () => ref.read(bidRepositoryProvider).decide(b.id, (latest) {
+        if (!BidWorkflow.canDecide(latest, UserRole.owner)) {
+          throw BidConflict(
+            'This bid was already decided on another phone. It is now in '
+            '${BidWorkflow.stageLabel(latest.stage)}.',
+          );
+        }
+        return BidWorkflow.decide(
+          bid: latest,
+          decision: decision,
+          ownerUid: uid,
+          note: note,
+          now: now,
+          verdict: v,
+        );
+      }),
     );
   }
 
   Future<String?> move(Bid b, BidStage to, {List<String>? reasons}) =>
-      _save(BidWorkflow.move(b, to, _now, reasons: reasons));
+      _change(b, BidWorkflow.move(b, to, _now, reasons: reasons));
 
   Future<String?> toggleTask(Bid b, String taskId) =>
-      _save(BidWorkflow.toggleTask(b, taskId, _now));
+      _change(b, BidWorkflow.toggleTask(b, taskId, _now));
 
   Future<String?> addTask(Bid b, String title) => title.trim().isEmpty
       ? Future.value('Enter a task.')
-      : _save(BidWorkflow.addTask(b, title, _now));
+      : _change(b, BidWorkflow.addTask(b, title, _now));
 
   Future<String?> remove(Bid b) =>
       _run(() => ref.read(bidRepositoryProvider).delete(b.id));
@@ -111,13 +122,19 @@ class BidActions extends Notifier<void> {
     return ref.read(verdictCacheProvider).watchOne(companyId, b.tenderId).first;
   }
 
-  Future<String?> _save(Bid b) =>
-      _run(() => ref.read(bidRepositoryProvider).save(b));
+  /// Writes only what changed from [before] to [after].
+  Future<String?> _change(Bid before, Bid after) => _run(
+    () => ref
+        .read(bidRepositoryProvider)
+        .update(before.id, BidChange.between(before, after)),
+  );
 
   Future<String?> _run(Future<void> Function() f) async {
     try {
       await f().timeout(const Duration(seconds: 15));
       return null;
+    } on BidConflict catch (e) {
+      return e.message;
     } on FirebaseException catch (e) {
       return e.code == 'permission-denied'
           ? 'You do not have permission to do that.'

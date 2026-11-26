@@ -46,6 +46,7 @@ service cloud.firestore {
             && b.get('requestedBy', null) == request.auth.uid))
         && b.get('approvalNote', '') == ''
         && b.get('tasks', []).size() == 0
+        && b.get('taskDone', {}).size() == 0
         && b.get('lossReasons', []).size() == 0
         && b.ownerUid == request.auth.uid;
     }
@@ -55,7 +56,8 @@ service cloud.firestore {
     //   themself;
     // - move on once the owner approved: Preparing to Submitted, then Won
     //   or Lost, with loss reasons only when Lost;
-    // - work the checklist.
+    // - work the checklist: tick tasks (taskDone) and add tasks, never
+    //   remove them.
     // Everything else (approval decisions, the owner's note, the verdict
     // and the tender facts) is the owner's.
     function bidManagerMayUpdate() {
@@ -63,7 +65,7 @@ service cloud.firestore {
       let b = request.resource.data;
       let keys = changedKeys();
       return keys.hasOnly(['approval', 'requestedBy', 'stage', 'lossReasons',
-          'tasks', 'updatedAt'])
+          'tasks', 'taskDone', 'updatedAt'])
         && (!('approval' in keys)
           || (old.stage == 'watching'
             && old.approval in ['none', 'rejected']
@@ -74,7 +76,8 @@ service cloud.firestore {
           || (old.approval == 'approved'
             && ((old.stage == 'preparing' && b.stage == 'submitted')
               || (old.stage == 'submitted' && b.stage in ['won', 'lost']))))
-        && (!('lossReasons' in keys) || b.stage == 'lost');
+        && (!('lossReasons' in keys) || b.stage == 'lost')
+        && (!('tasks' in keys) || b.tasks.size() > old.tasks.size());
     }
 
     // The caller holds an invite to this company.
@@ -143,16 +146,20 @@ service cloud.firestore {
     }
 
     match /bids/{bidId} {
-      allow read: if isMember(resource.data.companyId);
+      // Reading a bid that does not exist reveals nothing, and lets a
+      // removed bid show as removed instead of failing.
+      allow read: if resource == null || isMember(resource.data.companyId);
       // Any member may start watching a tender. The ID is tied to the
       // company, so one company cannot take another company's bid ID.
       allow create: if isMember(request.resource.data.companyId)
         && bidId == request.resource.data.companyId + '_'
           + request.resource.data.tenderId
         && newBidIsUnapproved();
-      // Only the owner approves: see bidManagerMayUpdate.
+      // Only the owner approves: see bidManagerMayUpdate. createdAt never
+      // changes, so a fresh bid written over an existing one (a stale
+      // "Watch this tender") is refused instead of wiping its progress.
       allow update: if isMember(resource.data.companyId)
-        && unchanged(['id', 'companyId', 'tenderId'])
+        && unchanged(['id', 'companyId', 'tenderId', 'createdAt'])
         && (isOwner(resource.data.companyId) || bidManagerMayUpdate());
       allow delete: if isOwner(resource.data.companyId);
     }
