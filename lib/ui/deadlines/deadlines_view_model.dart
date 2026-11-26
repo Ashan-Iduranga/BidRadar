@@ -5,6 +5,7 @@ import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../domain/reminders/reminder_planner.dart';
 import '../pipeline/pipeline_view_model.dart';
+import '../settings/notification_access.dart';
 import '../settings/settings_providers.dart';
 
 /// Active bids with a deadline, soonest first.
@@ -18,11 +19,15 @@ final deadlineBidsProvider = Provider<List<Bid>>((ref) {
 
 /// Keeps local reminders in step with the pipeline: whenever bids change,
 /// re-plan and reschedule (only if the plan actually changed). When the user
-/// turns reminders off in Profile, the plan is empty, which cancels them all.
+/// turns reminders off in Profile, or Android blocks notifications, the plan
+/// is empty, which cancels them all.
 final reminderSyncProvider = Provider<void>((ref) {
-  final enabled = ref.watch(
-    settingsProvider.select((s) => s.deadlineReminders),
-  );
+  final wanted = ref.watch(settingsProvider.select((s) => s.deadlineReminders));
+  // Reading this asks for the permission on first launch. Nothing is
+  // scheduled until Android has answered.
+  final access = ref.watch(notificationAccessProvider).value;
+  if (access == null) return;
+  final enabled = wanted && access == NotificationAccess.allowed;
   String? last;
   ref.listen<AsyncValue<List<Bid>>>(bidsProvider, (_, next) {
     final bids = next.value;

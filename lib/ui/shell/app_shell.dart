@@ -8,11 +8,12 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/motion.dart';
 import '../../core/theme/tokens.dart';
 import '../deadlines/deadlines_view_model.dart';
+import '../settings/notification_access.dart';
 
 /// Bottom navigation for the 5 top-level pages: a floating black bar with an
 /// orange pill on the current tab. Tender detail, Scan, Approvals and
 /// Profile are pushed on top of the shell.
-class AppShell extends ConsumerWidget {
+class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key, required this.shell});
 
   final StatefulNavigationShell shell;
@@ -26,9 +27,38 @@ class AppShell extends ConsumerWidget {
   ];
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // The user may allow or block notifications in Android settings while
+    // the app is in the background; read the answer again on return.
+    _lifecycle = AppLifecycleListener(
+      onResume: () {
+        if (ref.read(firebaseReadyProvider)) {
+          ref.read(notificationAccessProvider.notifier).refresh();
+        }
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final shell = widget.shell;
     final firebaseReady = ref.watch(firebaseReadyProvider);
-    // Deadline reminders follow the pipeline while the app is open.
+    // Deadline reminders follow the pipeline while the app is open. Reading
+    // them asks for the notification permission on first launch.
     if (firebaseReady) ref.watch(reminderSyncProvider);
     return GradientBackground(
       child: Scaffold(

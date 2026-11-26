@@ -227,8 +227,6 @@ class SyncState {
 /// "Sync now" and pull to refresh: runs the same FeedSync as the
 /// background job.
 class SyncViewModel extends Notifier<SyncState> {
-  bool _askedPermission = false;
-
   @override
   SyncState build() => const SyncState();
 
@@ -245,11 +243,6 @@ class SyncViewModel extends Notifier<SyncState> {
           .read(feedSyncProvider)
           .run(company: company, profile: profile);
       state = SyncState(last: report);
-      if (!_askedPermission) {
-        // Ask once, after the user has seen what a sync does.
-        _askedPermission = true;
-        await ref.read(notifierProvider).requestPermission();
-      }
       return report;
     } on Object {
       state = SyncState(last: state.last);

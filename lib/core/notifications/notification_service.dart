@@ -41,15 +41,46 @@ class NotificationService {
     _ready = true;
   }
 
-  /// Asks for the Android 13+ notification permission. Safe to call more
-  /// than once; Android only shows the dialog until the user answers.
-  Future<bool> requestPermission() async {
-    await init();
-    final android = _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-    return await android?.requestNotificationsPermission() ?? false;
+  AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+
+  /// Asks for the Android 13+ notification permission. Older Android
+  /// versions answer without a dialog. Safe to call more than once; Android
+  /// only shows the dialog while it still may. Null when Android cannot be
+  /// asked (another platform, or no plugin in tests).
+  Future<bool?> requestPermission() async {
+    try {
+      await init();
+      return await _android?.requestNotificationsPermission();
+    } on Object catch (e) {
+      Log.warn('notify', 'could not ask for permission: $e');
+      return null;
+    }
+  }
+
+  /// Whether Android lets BidRadar post notifications right now. Null when
+  /// it cannot tell.
+  Future<bool?> areEnabled() async {
+    try {
+      await init();
+      return await _android?.areNotificationsEnabled();
+    } on Object catch (e) {
+      Log.warn('notify', 'could not read the permission: $e');
+      return null;
+    }
+  }
+
+  /// Opens BidRadar's notification settings in Android. False when no
+  /// settings screen could be opened.
+  Future<bool> openSettings() async {
+    try {
+      return await _android?.openAppNotificationSettings() ?? false;
+    } on Object catch (e) {
+      Log.warn('notify', 'could not open settings: $e');
+      return false;
+    }
   }
 
   /// "3 new tenders match". Tapping it opens the app on the Feed.
