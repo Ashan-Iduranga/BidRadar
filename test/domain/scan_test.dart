@@ -5,6 +5,9 @@ import 'package:bidradar/core/text/text_utils.dart';
 import 'package:bidradar/data/local/app_database.dart';
 import 'package:bidradar/data/models/models.dart';
 import 'package:bidradar/data/providers.dart';
+import 'package:bidradar/domain/agent/ai_model.dart';
+import 'package:bidradar/domain/agent/bid_agent.dart';
+import 'package:bidradar/domain/agent/profile_fingerprint.dart';
 import 'package:bidradar/domain/rules/eligibility_rules.dart';
 import 'package:bidradar/domain/scan/scan.dart';
 import 'package:bidradar/ui/scan/scan_view_model.dart';
@@ -162,6 +165,8 @@ void main() {
       NoticeReader? reader,
       bool cacheFails = false,
       bool watch = true,
+      AiModel? model,
+      VerdictCache? verdicts,
     }) {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
@@ -172,8 +177,14 @@ void main() {
           tenderCacheProvider.overrideWithValue(
             cacheFails ? FailingCache(db) : TenderCache(db),
           ),
-          // No Firebase in tests: the cloud copy and the AI both fail.
-          bidAgentProvider.overrideWith((ref) => throw StateError('no AI')),
+          // No Firebase in tests: the cloud copy fails, and so does the AI
+          // unless a fake model is given.
+          if (model == null)
+            bidAgentProvider.overrideWith((ref) => throw StateError('no AI'))
+          else
+            bidAgentProvider.overrideWithValue(BidAgent(model: model)),
+          if (verdicts != null)
+            verdictCacheProvider.overrideWithValue(verdicts),
           currentCompanyProvider.overrideWith(
             (ref) => Stream.value(
               const Company(
@@ -302,5 +313,48 @@ void main() {
       final s = c.read(scanViewModelProvider) as ScanSaved;
       expect(s.tenderId, typed().toTender(DateTime(2026)).id);
     });
+
+    test(
+      'a scanned verdict is stored with the profile it was made with',
+      () async {
+        final db = AppDatabase(NativeDatabase.memory());
+        addTearDown(db.close);
+        final verdicts = VerdictCache(db);
+        final c = container(model: AnsweringModel(), verdicts: verdicts);
+        c.listen(currentCompanyProvider, (_, _) {});
+        c.listen(currentProfileProvider, (_, _) {});
+        final company = await c.read(currentCompanyProvider.future);
+        final profile = await c.read(currentProfileProvider.future);
+        final vm = c.read(scanViewModelProvider.notifier);
+        await vm.process(photo.path);
+        await vm.save(typed());
+
+        final tender = typed().toTender(DateTime(2026));
+        final e = await verdicts.entry('c', tender.id);
+        expect(e, isNotNull);
+        // Without it, the next sync would judge the tender again.
+        expect(e!.profileHash, ProfileFingerprint.of(company!, profile!));
+      },
+    );
   });
+}
+
+/// Answers every tender with a NO_BID, with no criteria to check.
+class AnsweringModel implements AiModel {
+  @override
+  String get modelName => 'answering';
+
+  @override
+  Future<AiVerdictPayload> judgeTender({
+    required Company company,
+    required CompanyProfile profile,
+    required Tender tender,
+    List<String> rejectedQuotes = const [],
+  }) async => const AiVerdictPayload(
+    verdict: VerdictKind.noBid,
+    fitScore: 20,
+    confidence: 0.9,
+    criteria: [],
+    missingDocs: [],
+  );
 }

@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/logging/log.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../domain/agent/profile_fingerprint.dart';
 import '../../domain/scan/scan.dart';
 import '../../domain/scan/scan_services.dart';
 import '../feed/feed_view_model.dart';
@@ -219,7 +220,14 @@ class ScanViewModel extends Notifier<ScanState> {
           tender: tender,
           rules: rules,
         );
-    await ref.read(verdictCacheProvider).put(v, textHash: tender.textHash);
+    // With the profile fingerprint, so the next sync reuses this verdict.
+    await ref
+        .read(verdictCacheProvider)
+        .put(
+          v,
+          textHash: tender.textHash,
+          profileHash: ProfileFingerprint.of(company, profile),
+        );
     try {
       await ref
           .read(syncStoreProvider)
