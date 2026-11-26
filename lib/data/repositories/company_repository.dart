@@ -47,6 +47,19 @@ abstract interface class CompanyRepository {
   });
 }
 
+/// The address already has an invite from another company. Callers show
+/// [code] in brackets, so it reads on its own; [message] says what to do.
+class InviteTakenException extends FirebaseException {
+  InviteTakenException(String email)
+    : super(
+        plugin: 'bidradar',
+        code: 'invited-by-another-company',
+        message:
+            '$email already has an invite from another company. They need '
+            'to accept or decline it first.',
+      );
+}
+
 abstract interface class ProfileRepository {
   Stream<CompanyProfile?> watch(String companyId);
   Future<void> save(CompanyProfile profile);
@@ -142,25 +155,37 @@ class FirestoreCompanyRepository implements CompanyRepository {
   Future<void> declineInvite(Invite invite) =>
       _invites.doc(inviteKey(invite.email)).delete();
 
+  /// Sends the invite, or sends it again: the rules let the owner replace
+  /// their own company's invite. Throws [InviteTakenException] when another
+  /// company already invited this address.
   @override
   Future<void> invite({
     required Company company,
     required String email,
     required String invitedBy,
-  }) {
+  }) async {
     final key = inviteKey(email);
-    return _invites
-        .doc(key)
-        .set(
-          Invite(
-            email: key,
-            companyId: company.id,
-            companyName: company.name,
-            invitedBy: invitedBy,
-            createdAt: DateTime.now().toUtc(),
-          ).toJson(),
-        );
+    try {
+      await _invites
+          .doc(key)
+          .set(
+            Invite(
+              email: key,
+              companyId: company.id,
+              companyName: company.name,
+              invitedBy: invitedBy,
+              createdAt: DateTime.now().toUtc(),
+            ).toJson(),
+          );
+    } on FirebaseException catch (e) {
+      throw inviteError(e, key);
+    }
   }
+
+  /// The owner may always write their own company's invite, so a refusal
+  /// means the address holds another company's invite.
+  static FirebaseException inviteError(FirebaseException e, String email) =>
+      e.code == 'permission-denied' ? InviteTakenException(email) : e;
 
   @override
   Future<void> acceptInvite({
