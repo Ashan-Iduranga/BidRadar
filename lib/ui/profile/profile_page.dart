@@ -634,13 +634,18 @@ class _TeamList extends ConsumerWidget {
                   context: context,
                   builder: (_) => _InviteDialog(
                     send: vm.invite,
-                    onSent: (email) => messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Invite saved. $email can now sign up and join.',
+                    onSent: (email, {required queued}) =>
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              queued
+                                  ? 'Invite saved on this phone. It is sent '
+                                        'when you are back online.'
+                                  : 'Invite saved. $email can now sign up '
+                                        'and join.',
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
                   ),
                 );
               },
@@ -654,7 +659,7 @@ class _TeamList extends ConsumerWidget {
 class _InviteDialog extends StatefulWidget {
   const _InviteDialog({required this.send, required this.onSent});
   final Future<String?> Function(String) send;
-  final ValueChanged<String> onSent;
+  final void Function(String email, {required bool queued}) onSent;
 
   @override
   State<_InviteDialog> createState() => _InviteDialogState();
@@ -676,9 +681,10 @@ class _InviteDialogState extends State<_InviteDialog> {
     final email = _c.text.trim();
     final e = await widget.send(email);
     if (!mounted) return;
-    if (e == null) {
+    // Saved on the phone while offline counts as sent: Firestore sends it.
+    if (e == null || e == kSavedOnPhone) {
       Navigator.pop(context);
-      widget.onSent(email);
+      widget.onSent(email, queued: e != null);
     } else {
       setState(() {
         _busy = false;

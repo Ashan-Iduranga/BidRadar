@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/geo/countries.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../data/repositories/company_repository.dart';
 import '../auth/auth_providers.dart';
 import '../session/session_providers.dart';
 
@@ -188,6 +189,8 @@ class ProfileViewModel extends Notifier<ProfileEditState> {
     }
   }
 
+  /// Returns null when sent, [kSavedOnPhone] when Firestore has not
+  /// confirmed in time (offline), or an error message.
   Future<String?> invite(String email) async {
     final company = ref.read(currentCompanyProvider).value;
     final me = ref.read(authStateProvider).value;
@@ -202,8 +205,14 @@ class ProfileViewModel extends Notifier<ProfileEditState> {
     try {
       await ref
           .read(companyRepositoryProvider)
-          .invite(company: company, email: e, invitedBy: me.uid);
+          .invite(company: company, email: e, invitedBy: me.uid)
+          .timeout(kSaveWait);
       return null;
+    } on TimeoutException {
+      // Offline: Firestore keeps the invite and sends it when back online.
+      return kSavedOnPhone;
+    } on InviteTakenException catch (x) {
+      return x.message;
     } on FirebaseException catch (x) {
       return 'Could not send the invite (${x.code}).';
     }
