@@ -71,6 +71,25 @@ Future<void> openReview(WidgetTester tester, NoticeReader reader) async {
 }
 
 void main() {
+  testWidgets('the bottom buttons stay above the navigation bar', (
+    tester,
+  ) async {
+    // Edge to edge with 3-button navigation: 48 dp at the bottom.
+    tester.view.physicalSize = const Size(360, 780);
+    tester.view.devicePixelRatio = 1;
+    tester.view.padding = const FakeViewPadding(bottom: 48);
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      ProviderScope(
+        child: MaterialApp(theme: AppTheme.light(), home: const ScanPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    // No camera in tests, so the page shows its start state.
+    final sample = find.text('Try a sample notice (debug)');
+    expect(tester.getRect(sample).bottom, lessThanOrEqualTo(780 - 48));
+  });
+
   testWidgets('a misread deadline year still opens the date picker', (
     tester,
   ) async {

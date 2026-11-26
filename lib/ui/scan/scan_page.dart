@@ -190,64 +190,75 @@ class _ScanPageState extends ConsumerState<ScanPage>
           )
         : null;
     if (c == null || !c.value.isInitialized) {
-      return Column(
-        children: [
-          Expanded(
-            child: EmptyState(
-              icon: Icons.document_scanner_outlined,
-              title: 'Scan a printed tender',
-              message:
-                  _cameraError ??
-                  'Starting the camera… Photograph a newspaper or printed '
-                      'notice; you confirm the buyer and deadline after.',
+      return SafeArea(
+        top: false,
+        child: Column(
+          children: [
+            Expanded(
+              child: EmptyState(
+                icon: Icons.document_scanner_outlined,
+                title: 'Scan a printed tender',
+                message:
+                    _cameraError ??
+                    'Starting the camera… Photograph a newspaper or printed '
+                        'notice; you confirm the buyer and deadline after.',
+              ),
             ),
-          ),
-          ?sample,
-          const SizedBox(height: Space.xl),
-        ],
+            ?sample,
+            const SizedBox(height: Space.xl),
+          ],
+        ),
       );
     }
-    return Column(
-      children: [
-        Expanded(
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              CameraPreview(c),
-              Positioned(
-                left: Space.gutter,
-                right: Space.gutter,
-                top: Space.gutter,
-                child: Material(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(Radii.sm),
-                  child: const Padding(
-                    padding: EdgeInsets.all(Space.md),
-                    child: Text(
-                      'Fit the whole notice in the frame, in good light.',
-                      style: TextStyle(color: Colors.white),
+    // SafeArea keeps the shutter above the navigation bar when the app
+    // draws edge to edge (Android 15 and later).
+    return SafeArea(
+      top: false,
+      child: Column(
+        children: [
+          Expanded(
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const ColoredBox(color: Colors.black),
+                // Center loosens the constraints, so the preview keeps the
+                // camera's aspect ratio instead of stretching to fill.
+                Center(child: CameraPreview(c)),
+                Positioned(
+                  left: Space.gutter,
+                  right: Space.gutter,
+                  top: Space.gutter,
+                  child: Material(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(Radii.sm),
+                    child: const Padding(
+                      padding: EdgeInsets.all(Space.md),
+                      child: Text(
+                        'Fit the whole notice in the frame, in good light.',
+                        style: TextStyle(color: Colors.white),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(Space.lg),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              FloatingActionButton.large(
-                tooltip: 'Take photo',
-                onPressed: _shoot,
-                child: const Icon(Icons.camera_alt_outlined),
-              ),
-            ],
+          Padding(
+            padding: const EdgeInsets.all(Space.lg),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FloatingActionButton.large(
+                  tooltip: 'Take photo',
+                  onPressed: _shoot,
+                  child: const Icon(Icons.camera_alt_outlined),
+                ),
+              ],
+            ),
           ),
-        ),
-        ?sample,
-      ],
+          ?sample,
+        ],
+      ),
     );
   }
 }
@@ -374,7 +385,9 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
     final error = theme.colorScheme.error;
 
     return ListView(
-      padding: const EdgeInsets.all(Space.gutter),
+      // The last button stays clear of the navigation bar (edge to edge).
+      padding: const EdgeInsets.all(Space.gutter)
+          .add(EdgeInsets.only(bottom: MediaQuery.paddingOf(context).bottom)),
       children: [
         if (r.error != null)
           Padding(
