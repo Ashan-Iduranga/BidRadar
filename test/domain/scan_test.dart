@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 const ocr =
     'INVITATION FOR BIDS. Ministry of Health. Bidders must hold ISO 9001 '
-    'certification. Bids must be submitted no later than 28 November 2026.';
+    'certification. Bids must be submitted no later than 30 June 2027.';
 
 class FakeOcr implements TextOcr {
   FakeOcr(this.text);
@@ -33,7 +33,7 @@ class FakeReader implements NoticeReader {
     return ScannedNotice.fromJson(const {
       'title': 'Hospital appointment system',
       'buyer': 'Ministry of Health',
-      'deadline': '2026-11-28T14:00:00',
+      'deadline': '2027-06-30T14:00:00',
       'country': 'lka',
       'requirements': ['Bidders must hold ISO 9001 certification'],
       'minTurnover': 150000000,
@@ -48,7 +48,7 @@ void main() {
       final n = ScannedNotice.fromJson(const {
         'title': ' X ',
         'buyer': 'B',
-        'deadline': '2026-11-28T14:00:00',
+        'deadline': '2027-06-30T14:00:00',
         'country': 'lka',
         'requirements': ['a', ' ', 3],
         'minTurnover': 1000,
@@ -57,7 +57,7 @@ void main() {
       });
       expect(n.title, 'X');
       expect(n.country, 'LKA');
-      expect(n.deadline, DateTime(2026, 11, 28, 14));
+      expect(n.deadline, DateTime(2027, 6, 30, 14));
       expect(n.requirements, ['a']);
       expect(n.currency, 'USD');
       expect(n.cpvCodes, ['72000000']);
@@ -84,7 +84,7 @@ void main() {
         ScanDraft(
           title: 'Hospital system',
           buyer: buyer,
-          deadline: deadline ?? DateTime(2026, 11, 28, 14),
+          deadline: deadline ?? DateTime(2027, 6, 30, 14),
           country: 'LKA',
           ocrText: ocr,
           minTurnover: 150000000,
