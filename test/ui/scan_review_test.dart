@@ -28,34 +28,62 @@ class DownReader implements NoticeReader {
   }) => Future.error(Exception('quota'));
 }
 
+/// The AI misreads the year of the deadline.
+class OldYearReader implements NoticeReader {
+  @override
+  Future<ScannedNotice> read({
+    required Uint8List image,
+    required String mimeType,
+    required String ocrText,
+  }) async => ScannedNotice(
+    title: 'Hospital system',
+    buyer: 'Ministry of Health',
+    deadline: DateTime(1996, 6, 30, 14),
+    country: 'LKA',
+    requirements: const [],
+  );
+}
+
+Future<void> openReview(WidgetTester tester, NoticeReader reader) async {
+  // Tall enough that the whole form is on screen.
+  tester.view.physicalSize = const Size(800, 2400);
+  tester.view.devicePixelRatio = 1;
+  addTearDown(tester.view.reset);
+  await tester.pumpWidget(
+    ProviderScope(
+      overrides: [
+        textOcrProvider.overrideWithValue(FakeOcr()),
+        noticeReaderProvider.overrideWithValue(reader),
+      ],
+      child: MaterialApp(theme: AppTheme.light(), home: const ScanPage()),
+    ),
+  );
+  await tester.pump();
+  final photo = File('${Directory.systemTemp.path}/br_scan_review.jpg');
+  await tester.runAsync(() async {
+    await photo.writeAsBytes([1, 2, 3]);
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(ScanPage)),
+    );
+    await container.read(scanViewModelProvider.notifier).process(photo.path);
+  });
+  await tester.pumpAndSettle();
+}
+
 void main() {
+  testWidgets('a misread deadline year still opens the date picker', (
+    tester,
+  ) async {
+    await openReview(tester, OldYearReader());
+    await tester.tap(find.text('Deadline'));
+    await tester.pumpAndSettle();
+    expect(find.byType(DatePickerDialog), findsOneWidget);
+  });
+
   testWidgets('a missing field is shown inline and nothing typed is lost', (
     tester,
   ) async {
-    // Tall enough that the whole form is on screen.
-    tester.view.physicalSize = const Size(800, 2400);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.reset);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [
-          textOcrProvider.overrideWithValue(FakeOcr()),
-          noticeReaderProvider.overrideWithValue(DownReader()),
-        ],
-        child: MaterialApp(theme: AppTheme.light(), home: const ScanPage()),
-      ),
-    );
-    await tester.pump();
-
-    final photo = File('${Directory.systemTemp.path}/br_scan_review.jpg');
-    await tester.runAsync(() async {
-      await photo.writeAsBytes([1, 2, 3]);
-      final container = ProviderScope.containerOf(
-        tester.element(find.byType(ScanPage)),
-      );
-      await container.read(scanViewModelProvider.notifier).process(photo.path);
-    });
-    await tester.pumpAndSettle();
+    await openReview(tester, DownReader());
     expect(find.textContaining('The AI could not read this notice'), findsOne);
 
     await tester.enterText(
@@ -79,5 +107,36 @@ void main() {
     );
     await tester.pump();
     expect(find.text('Add a title.'), findsNothing);
+  });
+
+  group('deadline picker range', () {
+    final now = DateTime(2026, 11, 30, 10);
+
+    test('a misread year far in the past opens at the first date', () {
+      final r = deadlinePickerRange(DateTime(1996, 6, 30, 14), now);
+      expect(r.initial, r.first);
+      expect(r.first, DateTime(2016));
+    });
+
+    test('a year far ahead opens at the last date', () {
+      final r = deadlinePickerRange(DateTime(2099), now);
+      expect(r.initial, r.last);
+    });
+
+    test('a normal deadline, or none, is kept', () {
+      expect(
+        deadlinePickerRange(DateTime(2027, 6, 30, 14), now).initial,
+        DateTime(2027, 6, 30, 14),
+      );
+      expect(
+        deadlinePickerRange(null, now).initial,
+        now.add(const Duration(days: 14)),
+      );
+    });
+
+    test('an old notice from last decade still opens the picker', () {
+      final r = deadlinePickerRange(DateTime(2019, 3, 1), now);
+      expect(r.initial, DateTime(2019, 3, 1));
+    });
   });
 }

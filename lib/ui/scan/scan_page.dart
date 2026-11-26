@@ -252,6 +252,23 @@ class _ScanPageState extends ConsumerState<ScanPage>
   }
 }
 
+/// The dates the deadline picker allows, and where it opens. Wide enough
+/// for an old newspaper notice or a long framework, and the start date is
+/// always inside the range: a misread year can no longer stop the picker
+/// from opening.
+@visibleForTesting
+({DateTime first, DateTime last, DateTime initial}) deadlinePickerRange(
+  DateTime? deadline,
+  DateTime now,
+) {
+  final first = DateTime(now.year - 10);
+  final last = DateTime(now.year + 10, 12, 31);
+  var initial = deadline ?? now.add(const Duration(days: 14));
+  if (initial.isBefore(first)) initial = first;
+  if (initial.isAfter(last)) initial = last;
+  return (first: first, last: last, initial: initial);
+}
+
 /// Confirm what the AI read. Buyer and deadline must be checked by a person
 /// before the tender is saved.
 class _ReviewForm extends ConsumerStatefulWidget {
@@ -289,13 +306,13 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
   }
 
   Future<void> _pickDeadline() async {
-    final now = DateTime.now();
-    final initial = _deadline ?? now.add(const Duration(days: 14));
+    final range = deadlinePickerRange(_deadline, DateTime.now());
+    final initial = range.initial;
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
-      firstDate: DateTime(now.year - 1),
-      lastDate: DateTime(now.year + 3),
+      firstDate: range.first,
+      lastDate: range.last,
     );
     if (date == null || !mounted) return;
     final time = await showTimePicker(
