@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bidradar/data/local/app_database.dart';
 import 'package:bidradar/data/models/models.dart';
 import 'package:bidradar/data/providers.dart';
@@ -25,11 +27,15 @@ class FakeBidRepository extends Fake implements BidRepository {
   final approvals = <Approval>[];
   Object? failWith;
 
+  /// Never answers, like a write waiting for a server it cannot reach.
+  bool offline = false;
+
   @override
   Future<void> decide(
     String bidId,
     ({Bid bid, Approval approval}) Function(Bid latest) decision,
   ) async {
+    if (offline) return Completer<void>().future;
     if (failWith case final e?) throw e;
     final r = decision(bids[bidId]!);
     bids[bidId] = r.bid;
@@ -38,6 +44,7 @@ class FakeBidRepository extends Fake implements BidRepository {
 
   @override
   Future<void> update(String bidId, BidChange change) async {
+    if (offline) return Completer<void>().future;
     if (failWith case final e?) throw e;
   }
 }
@@ -182,4 +189,65 @@ void main() {
       expect(bids.bids[pending().id]!.approval, ApprovalState.approved);
     },
   );
+
+  group('a failed write is never shown as success', () {
+    Future<String?> ask(FakeBidRepository bids, WidgetTester tester) async {
+      final phone = ownerPhone(bids, FakeSharedRecords());
+      await signedIn(phone.c);
+      final result = phone.c
+          .read(bidActionsProvider.notifier)
+          .requestApproval(
+            BidWorkflow.watch(
+              companyId: 'c1',
+              uid: 'bm',
+              tender: scanned,
+              now: now,
+            ),
+          );
+      await tester.pump(const Duration(seconds: 11));
+      return result;
+    }
+
+    testWidgets('offline, a change says it is saved on this phone', (
+      tester,
+    ) async {
+      final result = await ask(FakeBidRepository()..offline = true, tester);
+      expect(result, BidActions.savedOffline);
+    });
+
+    testWidgets('a refusal says it was not allowed', (tester) async {
+      final result = await ask(
+        FakeBidRepository()
+          ..failWith = FirebaseException(
+            plugin: 'cloud_firestore',
+            code: 'permission-denied',
+          ),
+        tester,
+      );
+      expect(result, startsWith('Not allowed'));
+    });
+
+    testWidgets('an unexpected error is reported', (tester) async {
+      final result = await ask(
+        FakeBidRepository()..failWith = StateError('bug'),
+        tester,
+      );
+      expect(result, 'Something went wrong. Try again.');
+    });
+
+    testWidgets('an approval without a connection is not "Approved"', (
+      tester,
+    ) async {
+      final bids = FakeBidRepository()
+        ..bids[pending().id] = pending()
+        ..offline = true;
+      final phone = ownerPhone(bids, FakeSharedRecords());
+      await signedIn(phone.c);
+      final result = phone.c
+          .read(bidActionsProvider.notifier)
+          .decide(pending(), ApprovalDecision.approved, 'Go', verdict: verdict);
+      await tester.pump(const Duration(seconds: 21));
+      expect(await result, BidActions.noConnection);
+    });
+  });
 }

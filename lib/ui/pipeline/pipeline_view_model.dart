@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -38,8 +40,25 @@ final pendingApprovalsProvider = Provider<List<Bid>>((ref) {
     ..sort((a, b) => a.updatedAt.compareTo(b.updatedAt));
 });
 
-/// All pipeline actions. Each returns an error message, or null on success.
+/// All pipeline actions. Each returns null when the change reached the
+/// server, or a message to show instead of the success text: an error, or
+/// [savedOffline] when the change is only on this phone so far.
 class BidActions extends Notifier<void> {
+  static const savedOffline =
+      'Saved on this phone. It will sync when you are back online.';
+  static const noConnection =
+      'No connection. Approving needs one; try again when you are online.';
+
+  /// How long a plain write waits for the server. After that it is still
+  /// queued on the phone, and Firestore sends it when the connection is
+  /// back.
+  static const writeTimeout = Duration(seconds: 10);
+
+  /// A decision runs in a transaction, which has its own 10 s limit. Wait
+  /// longer than that, so a slow but successful approval is never reported
+  /// as failed.
+  static const decideTimeout = Duration(seconds: 20);
+
   @override
   void build() {}
 
@@ -62,7 +81,10 @@ class BidActions extends Notifier<void> {
       verdict: v,
       now: _now,
     );
-    return _run(() => ref.read(bidRepositoryProvider).create(bid));
+    return _run(
+      () => ref.read(bidRepositoryProvider).create(bid),
+      denied: 'Could not add it. It may already be in the pipeline.',
+    );
   }
 
   Future<String?> requestApproval(Bid b) {
@@ -104,6 +126,7 @@ class BidActions extends Notifier<void> {
           verdict: v,
         );
       }),
+      needsServer: true,
     );
   }
 
@@ -171,19 +194,32 @@ class BidActions extends Notifier<void> {
         .update(before.id, BidChange.between(before, after)),
   );
 
-  Future<String?> _run(Future<void> Function() f) async {
+  /// Runs a write and says what happened. [needsServer] is for the
+  /// decision transaction, which is not queued offline.
+  Future<String?> _run(
+    Future<void> Function() f, {
+    bool needsServer = false,
+    String denied =
+        'Not allowed. The bid may have changed on another phone; check it '
+        'and try again.',
+  }) async {
     try {
-      await f().timeout(const Duration(seconds: 15));
+      await f().timeout(needsServer ? decideTimeout : writeTimeout);
       return null;
+    } on TimeoutException {
+      return needsServer ? noConnection : savedOffline;
     } on BidConflict catch (e) {
       return e.message;
     } on FirebaseException catch (e) {
-      return e.code == 'permission-denied'
-          ? 'You do not have permission to do that.'
-          : 'Could not save (${e.code}).';
-    } on Object {
-      // Offline: Firestore keeps the write and sends it later.
-      return null;
+      return switch (e.code) {
+        'permission-denied' => denied,
+        'unavailable' ||
+        'deadline-exceeded' => needsServer ? noConnection : savedOffline,
+        _ => 'Could not save (${e.code}).',
+      };
+    } on Object catch (e, st) {
+      Log.error('pipeline', 'write failed', e, st);
+      return 'Something went wrong. Try again.';
     }
   }
 }
