@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/logging/log.dart';
 import '../../core/router/app_router.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
@@ -25,17 +26,41 @@ class ScanPage extends ConsumerStatefulWidget {
   ConsumerState<ScanPage> createState() => _ScanPageState();
 }
 
-class _ScanPageState extends ConsumerState<ScanPage> {
+class _ScanPageState extends ConsumerState<ScanPage>
+    with WidgetsBindingObserver {
   CameraController? _camera;
   String? _cameraError;
+
+  /// True while a controller is being created, so a resume during the
+  /// camera permission dialog does not start a second one.
+  bool _starting = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _initCamera();
   }
 
+  /// Android takes the camera away from a backgrounded app, so release it
+  /// as soon as the app stops being in front and start it again on return.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _initCamera();
+      case AppLifecycleState.inactive:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+        _releaseCamera();
+    }
+  }
+
   Future<void> _initCamera() async {
+    if (_starting || _camera != null) return;
+    _starting = true;
+    CameraController? c;
     try {
       final cams = await availableCameras();
       if (cams.isEmpty) throw CameraException('none', 'No camera found.');
@@ -43,37 +68,78 @@ class _ScanPageState extends ConsumerState<ScanPage> {
         (c) => c.lensDirection == CameraLensDirection.back,
         orElse: () => cams.first,
       );
-      final c = CameraController(
-        back,
-        ResolutionPreset.high,
-        enableAudio: false,
-      );
+      c = CameraController(back, ResolutionPreset.high, enableAudio: false);
       await c.initialize();
-      if (!mounted) return await c.dispose();
-      setState(() => _camera = c);
-    } on Object catch (e) {
-      if (mounted) {
-        setState(
-          () => _cameraError = e is CameraException
-              ? (e.code.contains('Denied')
-                    ? 'Camera permission was denied. Allow it in Settings.'
-                    : e.description ?? e.code)
-              : 'The camera is not available.',
-        );
+      // The app may have gone to the background while the camera started
+      // (null means Android has not reported a state yet).
+      final life = WidgetsBinding.instance.lifecycleState;
+      final inFront = life == null || life == AppLifecycleState.resumed;
+      if (!mounted || !inFront) {
+        await _disposeQuietly(c);
+        return;
       }
+      setState(() {
+        _camera = c;
+        _cameraError = null;
+      });
+    } on Object catch (e) {
+      // A controller whose initialize() failed still holds native state.
+      if (c != null) await _disposeQuietly(c);
+      if (mounted) setState(() => _cameraError = _cameraMessage(e));
+    } finally {
+      _starting = false;
     }
   }
 
+  void _releaseCamera() {
+    final c = _camera;
+    if (c == null) return;
+    setState(() => _camera = null);
+    _disposeQuietly(c);
+  }
+
+  static Future<void> _disposeQuietly(CameraController c) async {
+    try {
+      await c.dispose();
+    } on Object catch (e) {
+      Log.warn('scan', 'camera dispose failed: $e');
+    }
+  }
+
+  static String _cameraMessage(Object e) => e is CameraException
+      ? (e.code.contains('Denied')
+            ? 'Camera permission was denied. Allow it in Settings.'
+            : e.description ?? e.code)
+      : 'The camera is not available.';
+
   @override
   void dispose() {
-    _camera?.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    final c = _camera;
+    _camera = null;
+    if (c != null) _disposeQuietly(c);
     super.dispose();
   }
 
   Future<void> _shoot() async {
     final c = _camera;
-    if (c == null || c.value.isTakingPicture) return;
-    final file = await c.takePicture();
+    if (c == null || !c.value.isInitialized || c.value.isTakingPicture) return;
+    final XFile file;
+    try {
+      file = await c.takePicture();
+    } on Object catch (e) {
+      Log.warn('scan', 'takePicture failed: $e');
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Could not take the photo (${_cameraMessage(e)}). Try again.',
+          ),
+        ),
+      );
+      return;
+    }
+    if (!mounted) return;
     await ref.read(scanViewModelProvider.notifier).process(file.path);
   }
 
