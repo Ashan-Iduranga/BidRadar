@@ -972,6 +972,17 @@ class $CachedVerdictsTable extends CachedVerdicts
     requiredDuringInsert: false,
     defaultValue: const Constant(0),
   );
+  static const VerificationMeta _profileHashMeta = const VerificationMeta(
+    'profileHash',
+  );
+  @override
+  late final GeneratedColumn<String> profileHash = GeneratedColumn<String>(
+    'profile_hash',
+    aliasedName,
+    true,
+    type: DriftSqlType.string,
+    requiredDuringInsert: false,
+  );
   @override
   List<GeneratedColumn> get $columns => [
     companyId,
@@ -980,6 +991,7 @@ class $CachedVerdictsTable extends CachedVerdicts
     at,
     json,
     failures,
+    profileHash,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1036,6 +1048,15 @@ class $CachedVerdictsTable extends CachedVerdicts
         failures.isAcceptableOrUnknown(data['failures']!, _failuresMeta),
       );
     }
+    if (data.containsKey('profile_hash')) {
+      context.handle(
+        _profileHashMeta,
+        profileHash.isAcceptableOrUnknown(
+          data['profile_hash']!,
+          _profileHashMeta,
+        ),
+      );
+    }
     return context;
   }
 
@@ -1069,6 +1090,10 @@ class $CachedVerdictsTable extends CachedVerdicts
         DriftSqlType.int,
         data['${effectivePrefix}failures'],
       )!,
+      profileHash: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}profile_hash'],
+      ),
     );
   }
 
@@ -1088,6 +1113,11 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
   /// Notice-specific AI failures in a row for this notice text (malformed
   /// or blocked answers). The sync stops retrying the notice after a few.
   final int failures;
+
+  /// Fingerprint of the company profile the verdict was made with (see
+  /// `ProfileFingerprint`). Null for verdicts from before schema version 5
+  /// and from callers that do not pass one; those count as out of date.
+  final String? profileHash;
   const CachedVerdict({
     required this.companyId,
     required this.tenderId,
@@ -1095,6 +1125,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
     required this.at,
     required this.json,
     required this.failures,
+    this.profileHash,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1105,6 +1136,9 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
     map['at'] = Variable<DateTime>(at);
     map['json'] = Variable<String>(json);
     map['failures'] = Variable<int>(failures);
+    if (!nullToAbsent || profileHash != null) {
+      map['profile_hash'] = Variable<String>(profileHash);
+    }
     return map;
   }
 
@@ -1116,6 +1150,9 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       at: Value(at),
       json: Value(json),
       failures: Value(failures),
+      profileHash: profileHash == null && nullToAbsent
+          ? const Value.absent()
+          : Value(profileHash),
     );
   }
 
@@ -1131,6 +1168,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       at: serializer.fromJson<DateTime>(json['at']),
       json: serializer.fromJson<String>(json['json']),
       failures: serializer.fromJson<int>(json['failures']),
+      profileHash: serializer.fromJson<String?>(json['profileHash']),
     );
   }
   @override
@@ -1143,6 +1181,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       'at': serializer.toJson<DateTime>(at),
       'json': serializer.toJson<String>(json),
       'failures': serializer.toJson<int>(failures),
+      'profileHash': serializer.toJson<String?>(profileHash),
     };
   }
 
@@ -1153,6 +1192,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
     DateTime? at,
     String? json,
     int? failures,
+    Value<String?> profileHash = const Value.absent(),
   }) => CachedVerdict(
     companyId: companyId ?? this.companyId,
     tenderId: tenderId ?? this.tenderId,
@@ -1160,6 +1200,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
     at: at ?? this.at,
     json: json ?? this.json,
     failures: failures ?? this.failures,
+    profileHash: profileHash.present ? profileHash.value : this.profileHash,
   );
   CachedVerdict copyWithCompanion(CachedVerdictsCompanion data) {
     return CachedVerdict(
@@ -1169,6 +1210,9 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       at: data.at.present ? data.at.value : this.at,
       json: data.json.present ? data.json.value : this.json,
       failures: data.failures.present ? data.failures.value : this.failures,
+      profileHash: data.profileHash.present
+          ? data.profileHash.value
+          : this.profileHash,
     );
   }
 
@@ -1180,14 +1224,22 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
           ..write('textHash: $textHash, ')
           ..write('at: $at, ')
           ..write('json: $json, ')
-          ..write('failures: $failures')
+          ..write('failures: $failures, ')
+          ..write('profileHash: $profileHash')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(companyId, tenderId, textHash, at, json, failures);
+  int get hashCode => Object.hash(
+    companyId,
+    tenderId,
+    textHash,
+    at,
+    json,
+    failures,
+    profileHash,
+  );
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1197,7 +1249,8 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
           other.textHash == this.textHash &&
           other.at == this.at &&
           other.json == this.json &&
-          other.failures == this.failures);
+          other.failures == this.failures &&
+          other.profileHash == this.profileHash);
 }
 
 class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
@@ -1207,6 +1260,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
   final Value<DateTime> at;
   final Value<String> json;
   final Value<int> failures;
+  final Value<String?> profileHash;
   final Value<int> rowid;
   const CachedVerdictsCompanion({
     this.companyId = const Value.absent(),
@@ -1215,6 +1269,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     this.at = const Value.absent(),
     this.json = const Value.absent(),
     this.failures = const Value.absent(),
+    this.profileHash = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CachedVerdictsCompanion.insert({
@@ -1224,6 +1279,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     required DateTime at,
     required String json,
     this.failures = const Value.absent(),
+    this.profileHash = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : companyId = Value(companyId),
        tenderId = Value(tenderId),
@@ -1237,6 +1293,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     Expression<DateTime>? at,
     Expression<String>? json,
     Expression<int>? failures,
+    Expression<String>? profileHash,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1246,6 +1303,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
       if (at != null) 'at': at,
       if (json != null) 'json': json,
       if (failures != null) 'failures': failures,
+      if (profileHash != null) 'profile_hash': profileHash,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1257,6 +1315,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     Value<DateTime>? at,
     Value<String>? json,
     Value<int>? failures,
+    Value<String?>? profileHash,
     Value<int>? rowid,
   }) {
     return CachedVerdictsCompanion(
@@ -1266,6 +1325,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
       at: at ?? this.at,
       json: json ?? this.json,
       failures: failures ?? this.failures,
+      profileHash: profileHash ?? this.profileHash,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1291,6 +1351,9 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     if (failures.present) {
       map['failures'] = Variable<int>(failures.value);
     }
+    if (profileHash.present) {
+      map['profile_hash'] = Variable<String>(profileHash.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1306,6 +1369,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
           ..write('at: $at, ')
           ..write('json: $json, ')
           ..write('failures: $failures, ')
+          ..write('profileHash: $profileHash, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1829,6 +1893,7 @@ typedef $$CachedVerdictsTableCreateCompanionBuilder =
       required DateTime at,
       required String json,
       Value<int> failures,
+      Value<String?> profileHash,
       Value<int> rowid,
     });
 typedef $$CachedVerdictsTableUpdateCompanionBuilder =
@@ -1839,6 +1904,7 @@ typedef $$CachedVerdictsTableUpdateCompanionBuilder =
       Value<DateTime> at,
       Value<String> json,
       Value<int> failures,
+      Value<String?> profileHash,
       Value<int> rowid,
     });
 
@@ -1878,6 +1944,11 @@ class $$CachedVerdictsTableFilterComposer
 
   ColumnFilters<int> get failures => $composableBuilder(
     column: $table.failures,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<String> get profileHash => $composableBuilder(
+    column: $table.profileHash,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1920,6 +1991,11 @@ class $$CachedVerdictsTableOrderingComposer
     column: $table.failures,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<String> get profileHash => $composableBuilder(
+    column: $table.profileHash,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CachedVerdictsTableAnnotationComposer
@@ -1948,6 +2024,11 @@ class $$CachedVerdictsTableAnnotationComposer
 
   GeneratedColumn<int> get failures =>
       $composableBuilder(column: $table.failures, builder: (column) => column);
+
+  GeneratedColumn<String> get profileHash => $composableBuilder(
+    column: $table.profileHash,
+    builder: (column) => column,
+  );
 }
 
 class $$CachedVerdictsTableTableManager
@@ -1989,6 +2070,7 @@ class $$CachedVerdictsTableTableManager
                 Value<DateTime> at = const Value.absent(),
                 Value<String> json = const Value.absent(),
                 Value<int> failures = const Value.absent(),
+                Value<String?> profileHash = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedVerdictsCompanion(
                 companyId: companyId,
@@ -1997,6 +2079,7 @@ class $$CachedVerdictsTableTableManager
                 at: at,
                 json: json,
                 failures: failures,
+                profileHash: profileHash,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -2007,6 +2090,7 @@ class $$CachedVerdictsTableTableManager
                 required DateTime at,
                 required String json,
                 Value<int> failures = const Value.absent(),
+                Value<String?> profileHash = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedVerdictsCompanion.insert(
                 companyId: companyId,
@@ -2015,6 +2099,7 @@ class $$CachedVerdictsTableTableManager
                 at: at,
                 json: json,
                 failures: failures,
+                profileHash: profileHash,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0

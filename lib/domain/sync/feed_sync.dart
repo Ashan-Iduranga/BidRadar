@@ -8,6 +8,7 @@ import '../../data/repositories/sync_store.dart';
 import '../../data/sources/tender_source.dart';
 import '../agent/ai_failure.dart';
 import '../agent/bid_agent.dart';
+import '../agent/profile_fingerprint.dart';
 import '../rules/eligibility_rules.dart';
 
 /// The feed pipeline: fetch → drop closed → dedup → hard rules → store → AI.
@@ -154,11 +155,16 @@ class FeedSync {
     final vc = verdicts;
     if (a == null || vc == null || maxAiPerSync <= 0) return const [];
 
-    // Tenders never asked about (or whose notice changed) go first; earlier
-    // AI failures wait behind them, so one notice that keeps failing is not
-    // first in line on every sync. cache.all() is soonest deadline first.
+    final fingerprint = ProfileFingerprint.of(company, profile);
+
+    // Tenders never asked about (or whose notice changed) go first, then
+    // verdicts made with an older profile, then earlier AI failures, so one
+    // notice that keeps failing is not first in line on every sync.
+    // cache.all() is soonest deadline first.
     final fresh = <_Pending>[];
+    final outdated = <_Pending>[];
     final retry = <_Pending>[];
+    var order = 0;
     for (final t in await cache.all()) {
       final r = rules.check(
         company: company,
@@ -169,19 +175,21 @@ class FeedSync {
       if (!r.passed) continue;
       final cached = await vc.entry(company.id, t.id);
       if (cached == null || cached.textHash != t.textHash) {
-        fresh.add(_Pending(t, r, 0, fresh.length + retry.length));
-        continue;
+        fresh.add(_Pending(t, r, 0, order++));
+      } else if (cached.failed) {
+        if (cached.failures >= maxNoticeFailures) continue; // for a person
+        retry.add(_Pending(t, r, cached.failures, order++));
+      } else if (cached.profileHash != fingerprint) {
+        outdated.add(_Pending(t, r, 0, order++));
       }
-      if (!cached.failed) continue; // reusable verdict
-      if (cached.failures >= maxNoticeFailures) continue; // for a person
-      retry.add(_Pending(t, r, cached.failures, fresh.length + retry.length));
+      // Otherwise the cached verdict is reused.
     }
     retry.sort(
       (x, y) => x.failures != y.failures
           ? x.failures.compareTo(y.failures)
           : x.order.compareTo(y.order),
     );
-    final todo = [...fresh, ...retry].take(maxAiPerSync);
+    final todo = [...fresh, ...outdated, ...retry].take(maxAiPerSync);
 
     final out = <Verdict>[];
     var noticeFailures = 0;
@@ -198,7 +206,12 @@ class FeedSync {
         // Not this notice's fault: keep its count.
         _ => p.failures,
       };
-      await vc.put(o.verdict, textHash: p.tender.textHash, failures: failures);
+      await vc.put(
+        o.verdict,
+        textHash: p.tender.textHash,
+        failures: failures,
+        profileHash: fingerprint,
+      );
       out.add(o.verdict);
       if (o.failure == AiFailure.notice) noticeFailures++;
       // Quota, connection, access or service problems will not clear up

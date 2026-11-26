@@ -270,6 +270,36 @@ void main() {
       expect(r2.judged, 2);
     });
 
+    test('editing the profile gets tenders judged again', () async {
+      await withAgent().run(company: company, profile: profile);
+      final calls = model.calls;
+      const edited = CompanyProfile(
+        companyId: 'c1',
+        cpvCodes: ['72000000'],
+        countries: ['LKA'],
+        certifications: ['ISO 27001'],
+      );
+      final r = await withAgent().run(company: company, profile: edited);
+      expect(r.judged, 2);
+      expect(model.calls, calls + 2);
+      // And then they are reused again.
+      final r2 = await withAgent().run(company: company, profile: edited);
+      expect(r2.judged, 0);
+    });
+
+    test('new tenders go before ones made with an older profile', () async {
+      await withAgent(max: 1).run(company: company, profile: profile);
+      model.asked.clear();
+      const edited = CompanyProfile(
+        companyId: 'c1',
+        cpvCodes: ['72000000'],
+        countries: ['LKA'],
+        certifications: ['ISO 27001'],
+      );
+      await withAgent(max: 1).run(company: company, profile: edited);
+      expect(model.asked, ['worldbank_wb1'], reason: 'never judged before');
+    });
+
     test('one notice that fails does not stop the others', () async {
       // ted_ok closes first, so it is asked about first.
       model.failFor = {'ted_ok': const FormatException('bad json')};

@@ -37,32 +37,52 @@ final _verdict = Verdict(
   at: DateTime.utc(2026, 11, 2),
 );
 
-void main() {
-  test('a version 3 cache keeps its verdicts after the upgrade', () async {
-    final db = AppDatabase(
-      NativeDatabase.memory(
-        setup: (raw) {
-          if (raw.userVersion != 0) return;
-          for (final sql in _v3) {
-            raw.execute(sql);
-          }
-          raw.execute('INSERT INTO cached_verdicts VALUES (?, ?, ?, ?, ?)', [
-            'c1',
-            'ted_1',
-            'hash-1',
-            DateTime.utc(2026, 11, 2).millisecondsSinceEpoch ~/ 1000,
-            jsonEncode(_verdict.toJson()),
-          ]);
-          raw.userVersion = 3;
-        },
-      ),
-    );
-    addTearDown(db.close);
+/// Opens an in-memory database that starts as schema [version] (3 or 4)
+/// with one cached verdict, then lets AppDatabase migrate it.
+AppDatabase _oldDatabase(int version) => AppDatabase(
+  NativeDatabase.memory(
+    setup: (raw) {
+      if (raw.userVersion != 0) return;
+      for (final sql in _v3) {
+        raw.execute(sql);
+      }
+      if (version >= 4) {
+        raw.execute(
+          'ALTER TABLE cached_verdicts ADD COLUMN '
+          '"failures" INTEGER NOT NULL DEFAULT 0',
+        );
+      }
+      raw.execute(
+        'INSERT INTO cached_verdicts '
+        '(company_id, tender_id, text_hash, at, json) VALUES (?, ?, ?, ?, ?)',
+        [
+          'c1',
+          'ted_1',
+          'hash-1',
+          DateTime.utc(2026, 11, 2).millisecondsSinceEpoch ~/ 1000,
+          jsonEncode(_verdict.toJson()),
+        ],
+      );
+      raw.userVersion = version;
+    },
+  ),
+);
 
-    final e = await VerdictCache(db).entry('c1', 'ted_1');
-    expect(e, isNotNull, reason: 'the row survives the migration');
-    expect(e!.verdict.verdict, VerdictKind.bid);
-    expect(e.textHash, 'hash-1');
-    expect(e.failures, 0);
-  });
+void main() {
+  for (final version in [3, 4]) {
+    test(
+      'a version $version cache keeps its verdicts after the upgrade',
+      () async {
+        final db = _oldDatabase(version);
+        addTearDown(db.close);
+
+        final e = await VerdictCache(db).entry('c1', 'ted_1');
+        expect(e, isNotNull, reason: 'the row survives the migration');
+        expect(e!.verdict.verdict, VerdictKind.bid);
+        expect(e.textHash, 'hash-1');
+        expect(e.failures, 0);
+        expect(e.profileHash, isNull, reason: 'made before fingerprints');
+      },
+    );
+  }
 }

@@ -53,6 +53,11 @@ class CachedVerdicts extends Table {
   /// or blocked answers). The sync stops retrying the notice after a few.
   IntColumn get failures => integer().withDefault(const Constant(0))();
 
+  /// Fingerprint of the company profile the verdict was made with (see
+  /// `ProfileFingerprint`). Null for verdicts from before schema version 5
+  /// and from callers that do not pass one; those count as out of date.
+  TextColumn get profileHash => text().nullable()();
+
   @override
   Set<Column<Object>> get primaryKey => {companyId, tenderId};
 }
@@ -71,7 +76,7 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -79,11 +84,16 @@ class AppDatabase extends _$AppDatabase {
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(syncRuns);
       // createTable uses the current columns, so later columns are only
-      // added to tables that already existed.
+      // added to tables that already existed. Existing rows are kept.
       if (from < 3) {
         await m.createTable(cachedVerdicts);
-      } else if (from < 4) {
-        await m.addColumn(cachedVerdicts, cachedVerdicts.failures);
+      } else {
+        if (from < 4) {
+          await m.addColumn(cachedVerdicts, cachedVerdicts.failures);
+        }
+        if (from < 5) {
+          await m.addColumn(cachedVerdicts, cachedVerdicts.profileHash);
+        }
       }
     },
   );
@@ -276,6 +286,7 @@ class CachedVerdictEntry {
     required this.verdict,
     required this.textHash,
     required this.failures,
+    this.profileHash,
   });
 
   final Verdict verdict;
@@ -285,6 +296,9 @@ class CachedVerdictEntry {
 
   /// Notice-specific AI failures in a row (see [CachedVerdicts.failures]).
   final int failures;
+
+  /// Fingerprint of the profile the verdict was made with, if known.
+  final String? profileHash;
 
   /// The AI gave no usable answer, so the sync may try again.
   bool get failed => verdict.status == VerdictStatus.aiUnavailable;
@@ -297,19 +311,26 @@ class VerdictCache {
 
   /// Stores [v] as the latest verdict. [failures] counts notice-specific AI
   /// failures in a row; leave it at 0 for an answer or a manual run.
-  Future<void> put(Verdict v, {required String textHash, int failures = 0}) =>
-      _db
-          .into(_db.cachedVerdicts)
-          .insertOnConflictUpdate(
-            CachedVerdictsCompanion.insert(
-              companyId: v.companyId,
-              tenderId: v.tenderId,
-              textHash: textHash,
-              at: v.at.toUtc(),
-              json: jsonEncode(v.toJson()),
-              failures: Value(failures),
-            ),
-          );
+  /// [profileHash] is the `ProfileFingerprint` the verdict was made with;
+  /// without it the sync treats the verdict as out of date.
+  Future<void> put(
+    Verdict v, {
+    required String textHash,
+    int failures = 0,
+    String? profileHash,
+  }) => _db
+      .into(_db.cachedVerdicts)
+      .insertOnConflictUpdate(
+        CachedVerdictsCompanion.insert(
+          companyId: v.companyId,
+          tenderId: v.tenderId,
+          textHash: textHash,
+          at: v.at.toUtc(),
+          json: jsonEncode(v.toJson()),
+          failures: Value(failures),
+          profileHash: Value(profileHash),
+        ),
+      );
 
   /// The cached verdict for a tender, whatever its notice text.
   Future<CachedVerdictEntry?> entry(String companyId, String tenderId) async {
@@ -324,14 +345,21 @@ class VerdictCache {
       verdict: _decode(row),
       textHash: row.textHash,
       failures: row.failures,
+      profileHash: row.profileHash,
     );
   }
 
-  /// A verdict that can be reused for [tender]: same notice text, and not a
-  /// failed AI call (those are retried on a later sync).
-  Future<Verdict?> reusable(String companyId, Tender tender) async {
+  /// A verdict that can be reused for [tender]: same notice text, not a
+  /// failed AI call (those are retried on a later sync), and, when
+  /// [profileHash] is given, made with that profile.
+  Future<Verdict?> reusable(
+    String companyId,
+    Tender tender, {
+    String? profileHash,
+  }) async {
     final e = await entry(companyId, tender.id);
     if (e == null || e.textHash != tender.textHash || e.failed) return null;
+    if (profileHash != null && e.profileHash != profileHash) return null;
     return e.verdict;
   }
 
