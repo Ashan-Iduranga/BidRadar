@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +7,7 @@ import '../../core/geo/countries.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
+import '../auth/auth_providers.dart';
 import '../onboarding/onboarding_page.dart' show parseAmount;
 import '../session/session_providers.dart';
 import '../widgets/app_header.dart';
@@ -211,7 +211,7 @@ class _ProfileBody extends ConsumerWidget {
         ),
         const SizedBox(height: Space.xl),
         OutlinedButton.icon(
-          onPressed: () => FirebaseAuth.instance.signOut(),
+          onPressed: () => ref.read(authServiceProvider).signOut(),
           icon: const Icon(Icons.logout),
           label: const Text('Sign out'),
         ),

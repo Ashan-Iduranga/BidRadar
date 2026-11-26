@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -677,7 +676,7 @@ class _SignOutButton extends ConsumerWidget {
                   ],
                 ),
               );
-              if (ok ?? false) await FirebaseAuth.instance.signOut();
+              if (ok ?? false) await ref.read(authServiceProvider).signOut();
             },
     );
   }

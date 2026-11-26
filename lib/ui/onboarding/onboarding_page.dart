@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -126,7 +125,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           showAvatar: false,
           actions: [
             TextButton(
-              onPressed: _busy ? null : () => FirebaseAuth.instance.signOut(),
+              onPressed: _busy
+                  ? null
+                  : () => ref.read(authServiceProvider).signOut(),
               child: const Text('Sign out'),
             ),
           ],

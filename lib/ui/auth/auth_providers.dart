@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/firebase/firebase_bootstrap.dart';
 import '../../core/logging/log.dart';
+import '../../data/local/app_database.dart';
+import '../../data/providers.dart';
 
 /// Signed-in user, or null. Always null when Firebase is not configured.
 final authStateProvider = StreamProvider<User?>((ref) {
@@ -82,6 +84,10 @@ final signInViewModelProvider = AsyncNotifierProvider<SignInViewModel, void>(
 
 /// Account calls besides sign-in. An interface so tests can fake it.
 abstract interface class AuthService {
+  /// The only way the app signs out: clears what this phone kept for the
+  /// user (see [clearLocalData]), then signs out of Firebase.
+  Future<void> signOut();
+
   Future<void> sendEmailVerification();
 
   /// Reloads the user and forces a new ID token, so the `email_verified`
@@ -90,9 +96,22 @@ abstract interface class AuthService {
 }
 
 class FirebaseAuthService implements AuthService {
-  FirebaseAuthService(this._auth);
+  /// [_clearLocal] deletes the phone's local data; see [clearLocalData].
+  FirebaseAuthService(this._auth, this._clearLocal);
 
   final FirebaseAuth _auth;
+  final Future<void> Function() _clearLocal;
+
+  /// Signs out even if clearing fails: staying signed in would be worse.
+  @override
+  Future<void> signOut() async {
+    try {
+      await _clearLocal();
+    } on Object catch (e, st) {
+      Log.error('auth', 'could not clear local data on sign-out', e, st);
+    }
+    await _auth.signOut();
+  }
 
   @override
   Future<void> sendEmailVerification() async =>
@@ -109,8 +128,21 @@ class FirebaseAuthService implements AuthService {
 }
 
 final authServiceProvider = Provider<AuthService>(
-  (ref) => FirebaseAuthService(FirebaseAuth.instance),
+  (ref) => FirebaseAuthService(
+    FirebaseAuth.instance,
+    () => clearLocalData(ref.read(appDatabaseProvider)),
+  ),
 );
+
+/// Deletes what this phone keeps for the signed-in user: the tender cache,
+/// the verdict cache and the sync log. The next user on the phone starts
+/// clean, and their first sync fetches and judges for their own company.
+/// Uses drift's generated tables, so added columns do not affect it.
+Future<void> clearLocalData(AppDatabase db) => db.transaction(() async {
+  await db.delete(db.cachedVerdicts).go();
+  await db.delete(db.cachedTenders).go();
+  await db.delete(db.syncRuns).go();
+});
 
 /// Whether the signed-in user's email is verified. Joining a team by
 /// invite needs it. Starts from the signed-in user and is updated by

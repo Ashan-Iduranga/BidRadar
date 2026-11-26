@@ -48,6 +48,9 @@ class FakeAuthService implements AuthService {
   var checks = 0;
 
   @override
+  Future<void> signOut() async {}
+
+  @override
   Future<void> sendEmailVerification() async => sent++;
 
   @override
