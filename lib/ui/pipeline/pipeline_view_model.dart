@@ -17,9 +17,14 @@ final bidsProvider = StreamProvider<List<Bid>>((ref) {
   return ref.watch(bidRepositoryProvider).watchBids(companyId);
 });
 
-final bidProvider = StreamProvider.family<Bid?, String>(
-  (ref, id) => ref.watch(bidRepositoryProvider).watchBid(id),
-);
+/// One bid, live while its page is open. Auto-disposed, so its Firestore
+/// listener ends when the page closes, and tied to the signed-in user, so
+/// it also ends on sign-out instead of failing with permission-denied.
+final bidProvider = StreamProvider.autoDispose.family<Bid?, String>((ref, id) {
+  final uid = ref.watch(authStateProvider.select((a) => a.value?.uid));
+  if (uid == null) return Stream.value(null);
+  return ref.watch(bidRepositoryProvider).watchBid(id);
+});
 
 /// The bid for a tender, if the company is tracking it.
 final bidForTenderProvider = Provider.family<Bid?, String>((ref, tenderId) {
