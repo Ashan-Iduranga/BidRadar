@@ -661,8 +661,9 @@ class _SignOutButton extends ConsumerWidget {
                 builder: (context) => AlertDialog(
                   title: const Text('Sign out?'),
                   content: const Text(
-                    'Your tenders stay saved on this phone. Sign in again to '
-                    'keep working.',
+                    'Tenders and AI verdicts saved on this phone are '
+                    'cleared. Your company and bids stay in your account; '
+                    'sign in and sync to get the feed back.',
                   ),
                   actions: [
                     TextButton(
