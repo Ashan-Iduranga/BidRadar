@@ -345,10 +345,13 @@ class _Meta extends StatelessWidget {
       children: [
         Icon(icon, size: 16, color: color),
         const SizedBox(width: Space.xs),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.labelMedium
-              ?.copyWith(color: color),
+        // Wraps at large text sizes instead of running off the card.
+        Flexible(
+          child: Text(
+            text,
+            style: Theme.of(context).textTheme.labelMedium
+                ?.copyWith(color: color),
+          ),
         ),
       ],
     );
