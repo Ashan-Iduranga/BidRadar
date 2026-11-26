@@ -27,6 +27,56 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    // Top-level fields an update adds, removes or changes.
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function unchanged(keys) {
+      return !changedKeys().hasAny(keys);
+    }
+
+    // A new bid starts in Watching, not approved, with no checklist, no
+    // outcome and no owner's note. Anyone asking at once must be the caller.
+    function newBidIsUnapproved() {
+      let b = request.resource.data;
+      return b.stage == 'watching'
+        && ((b.approval == 'none' && b.get('requestedBy', null) == null)
+          || (b.approval == 'pending'
+            && b.get('requestedBy', null) == request.auth.uid))
+        && b.get('approvalNote', '') == ''
+        && b.get('tasks', []).size() == 0
+        && b.get('lossReasons', []).size() == 0
+        && b.ownerUid == request.auth.uid;
+    }
+
+    // What a bid manager may change on an existing bid:
+    // - ask for approval: none or rejected to pending, in Watching, as
+    //   themself;
+    // - move on once the owner approved: Preparing to Submitted, then Won
+    //   or Lost, with loss reasons only when Lost;
+    // - work the checklist.
+    // Everything else (approval decisions, the owner's note, the verdict
+    // and the tender facts) is the owner's.
+    function bidManagerMayUpdate() {
+      let old = resource.data;
+      let b = request.resource.data;
+      let keys = changedKeys();
+      return keys.hasOnly(['approval', 'requestedBy', 'stage', 'lossReasons',
+          'tasks', 'updatedAt'])
+        && (!('approval' in keys)
+          || (old.stage == 'watching'
+            && old.approval in ['none', 'rejected']
+            && b.approval == 'pending'))
+        && (!('requestedBy' in keys)
+          || (b.approval == 'pending' && b.requestedBy == request.auth.uid))
+        && (!('stage' in keys)
+          || (old.approval == 'approved'
+            && ((old.stage == 'preparing' && b.stage == 'submitted')
+              || (old.stage == 'submitted' && b.stage in ['won', 'lost']))))
+        && (!('lossReasons' in keys) || b.stage == 'lost');
+    }
+
     // The caller holds an invite to this company.
     function invitedTo(companyId) {
       let path = /databases/$(database)/documents/invites/$(myEmail());
@@ -94,17 +144,16 @@ service cloud.firestore {
 
     match /bids/{bidId} {
       allow read: if isMember(resource.data.companyId);
-      allow create: if isMember(request.resource.data.companyId);
-      // Members update bids, but only the owner approves: a bid manager may
-      // only ask (approval -> 'pending') and cannot leave 'watching' until
-      // the owner has approved.
+      // Any member may start watching a tender. The ID is tied to the
+      // company, so one company cannot take another company's bid ID.
+      allow create: if isMember(request.resource.data.companyId)
+        && bidId == request.resource.data.companyId + '_'
+          + request.resource.data.tenderId
+        && newBidIsUnapproved();
+      // Only the owner approves: see bidManagerMayUpdate.
       allow update: if isMember(resource.data.companyId)
-        && request.resource.data.companyId == resource.data.companyId
-        && (isOwner(resource.data.companyId)
-          || ((request.resource.data.approval == resource.data.approval
-                || request.resource.data.approval == 'pending')
-            && (resource.data.stage != 'watching'
-                || request.resource.data.stage == 'watching')));
+        && unchanged(['id', 'companyId', 'tenderId'])
+        && (isOwner(resource.data.companyId) || bidManagerMayUpdate());
       allow delete: if isOwner(resource.data.companyId);
     }
 
