@@ -115,13 +115,21 @@ void main() {
       );
     });
 
-    test('falls back to a date in the notice text', () {
+    test('falls back to a date in the notice text, in local time', () {
       expect(
         TedClient.resolveDeadline(
           {},
           'Tenders must arrive. Deadline for receipt: 15.12.2026 at 12:00.',
+          country: 'AUT',
         ),
-        DateTime.utc(2026, 12, 15, 12),
+        DateTime.utc(2026, 12, 15, 11), // Vienna is UTC+1 in December
+      );
+    });
+
+    test('a text deadline with no known zone is read as early as possible', () {
+      expect(
+        TedClient.resolveDeadline({}, 'Deadline: 15.12.2026 at 12:00.'),
+        DateTime.utc(2026, 12, 14, 22), // 12:00 at UTC+14
       );
     });
 
@@ -201,7 +209,9 @@ void main() {
       expect(t.buyer, 'Road Development Authority');
       expect(t.country, 'LKA');
       expect(t.cpvCodes, isEmpty);
-      expect(t.deadline, DateTime.utc(2026, 11, 25, 14));
+      // 25 Nov 2026 14:00 in Colombo (UTC+5:30), not 14:00 UTC.
+      expect(t.deadline, DateTime.utc(2026, 11, 25, 8, 30));
+      expect(t.noticeText, isNot(contains('time zone is not certain')));
       expect(t.noticeText, contains('Procurement: Goods'));
       expect(t.noticeText, isNot(contains('<p>')));
       expect(t.url, endsWith('/procurement-detail/OP00476835'));
@@ -296,6 +306,54 @@ void main() {
         () => expect(DeadlineParser.fromText(text), expected),
       );
     }
+
+    for (final (text, expected) in [
+      (
+        'delivered on or before 25th November 2026 at 2.00 p.m. Late bids',
+        DateTime.utc(2026, 11, 25, 14),
+      ),
+      (
+        'Requests for clarification on or before 10 November 2026.',
+        null, // a secondary deadline, and no other
+      ),
+      (
+        'no later than 25th November 2026 at 2.00 p.m.',
+        DateTime.utc(2026, 11, 25, 14),
+      ),
+      (
+        'Deadline: 3 December 2026, 11:30 AM',
+        DateTime.utc(2026, 12, 3, 11, 30),
+      ),
+      ('Deadline: 3 December 2026 at 12 noon', DateTime.utc(2026, 12, 3, 12)),
+      (
+        'Deadline: 3 December 2026 at 12.30 a.m.',
+        DateTime.utc(2026, 12, 3, 0, 30),
+      ),
+      ('Deadline: 3 December 2026 at 12 pm', DateTime.utc(2026, 12, 3, 12)),
+      ('Deadline: 3 December 2026 at 3 PM', DateTime.utc(2026, 12, 3, 15)),
+      (
+        'Deadline: 3 December 2026 at 1400 hours',
+        DateTime.utc(2026, 12, 3, 14),
+      ),
+      (
+        'Deadline: 3 December 2026, 10 copies',
+        DateTime.utc(2026, 12, 3, 23, 59),
+      ),
+    ]) {
+      test(
+        'reads the time in "$text"',
+        () => expect(DeadlineParser.fromText(text), expected),
+      );
+    }
+
+    test('skips clarification and other secondary deadlines', () {
+      const text =
+          'Deadline for clarification requests: 10 November 2026. '
+          'Questions deadline: 12 November 2026. A pre-bid meeting is on '
+          '14 November 2026. Bids must be submitted no later than '
+          '25 November 2026 at 2.00 p.m.';
+      expect(DeadlineParser.fromText(text), DateTime.utc(2026, 11, 25, 14));
+    });
 
     test('ignores dates without a deadline keyword', () {
       expect(DeadlineParser.fromText('Published 2026-10-01.'), isNull);

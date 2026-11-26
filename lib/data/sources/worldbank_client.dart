@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../core/geo/countries.dart';
+import '../../core/geo/local_time.dart';
 import '../../core/logging/log.dart';
 import '../../core/net/resilient_http.dart';
 import '../../core/text/text_utils.dart';
@@ -157,6 +158,17 @@ class WorldBankClient implements TenderSource {
     final group = _groupLabel(n['procurement_group'] as String?);
     final method = n['procurement_method_name'] as String?;
 
+    final countryName = (n['project_ctry_name'] as String?) ?? '';
+    final country = Countries.alpha3FromName(countryName) ?? '';
+    // The API and the notice give the buyer's local time.
+    final wall =
+        combine(
+          n['submission_deadline_date'] as String?,
+          n['submission_deadline_time'] as String?,
+        ) ??
+        DeadlineParser.fromText(body);
+    final local = wall == null ? null : LocalTime.toUtc(wall, country);
+
     final noticeText = [
       title,
       if (project != null) 'Project: $project',
@@ -164,23 +176,19 @@ class WorldBankClient implements TenderSource {
         'Procurement: $group${method == null ? '' : ' ($method)'}',
       if (n['bid_reference_no'] != null) 'Reference: ${n['bid_reference_no']}',
       if (body.isNotEmpty) body,
+      if (wall != null && local != null && !local.exact)
+        LocalTime.uncertainNote(wall),
     ].join('\n');
 
-    final countryName = (n['project_ctry_name'] as String?) ?? '';
     return Tender(
       source: TenderSourceType.worldBank,
       sourceId: id,
       title: title,
       buyer:
           _clean(n['contact_organization']) ?? project ?? 'World Bank project',
-      country: Countries.alpha3FromName(countryName) ?? '',
+      country: country,
       cpvCodes: const [],
-      deadline:
-          combine(
-            n['submission_deadline_date'] as String?,
-            n['submission_deadline_time'] as String?,
-          ) ??
-          DeadlineParser.fromText(body),
+      deadline: local?.utc,
       noticeText: noticeText,
       textHash: TextUtils.hash(noticeText),
       url:
@@ -190,9 +198,9 @@ class WorldBankClient implements TenderSource {
     );
   }
 
-  /// "2026-11-25T00:00:00Z" + "14:00" -> 2026-11-25T14:00Z. The API gives
-  /// no time zone for the time, so it is read as UTC; a few hours of error
-  /// only matters on the last day, where the Deadlines page warns anyway.
+  /// "2026-11-25T00:00:00Z" + "14:00" -> 25 Nov 2026 14:00 as a local
+  /// wall-clock time (fields only; the "Z" on the date means nothing). The
+  /// caller converts it with the project country's time zone.
   static DateTime? combine(String? date, String? time) {
     if (date == null || date.length < 10) return null;
     final day = DateTime.tryParse(date.substring(0, 10));
