@@ -99,6 +99,20 @@ void main() {
     expect(find.byType(DatePickerDialog), findsOneWidget);
   });
 
+  testWidgets('the currency field keeps its own text across rebuilds', (
+    tester,
+  ) async {
+    await openReview(tester, DownReader());
+    final currency = find.widgetWithText(TextField, 'Currency');
+    await tester.enterText(currency, 'lk');
+    // Any other change rebuilds the form.
+    await tester.tap(find.text('Show scanned text'));
+    await tester.pump();
+    final field = tester.widget<TextField>(currency);
+    expect(field.controller!.text, 'lk');
+    expect(field.controller!.selection.baseOffset, 2);
+  });
+
   testWidgets('a missing field is shown inline and nothing typed is lost', (
     tester,
   ) async {

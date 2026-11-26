@@ -301,7 +301,9 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
   );
   late DateTime? _deadline = _typed?.deadline ?? _read.deadline;
   late String _country = _typed?.country ?? _read.country;
-  late String? _currency = _typed?.currency ?? _read.currency;
+  late final _currency = TextEditingController(
+    text: _typed?.currency ?? _read.currency ?? '',
+  );
   late bool _deadlineConfirmed = _typed?.deadline != null;
   bool _showText = false;
 
@@ -313,6 +315,7 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
     _title.dispose();
     _buyer.dispose();
     _turnover.dispose();
+    _currency.dispose();
     super.dispose();
   }
 
@@ -349,6 +352,12 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
     }
   }
 
+  /// A 3-letter ISO 4217 code, or null.
+  static String? _currencyCode(String typed) {
+    final code = typed.trim().toUpperCase();
+    return code.length == 3 ? code : null;
+  }
+
   ScanDraft _draft() => ScanDraft(
     title: _title.text,
     buyer: _buyer.text,
@@ -357,7 +366,7 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
     ocrText: widget.review.ocrText,
     requirements: _read.requirements,
     minTurnover: parseAmount(_turnover.text),
-    currency: (_currency?.length == 3) ? _currency : null,
+    currency: _currencyCode(_currency.text),
     cpvCodes: _read.cpvCodes,
   );
 
@@ -466,17 +475,15 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
                   labelText: 'Minimum turnover',
                   helperText: 'If the notice states one.',
                 ),
-                onChanged: (_) => setState(() {}),
               ),
             ),
             const SizedBox(width: Space.md),
             Expanded(
               flex: 2,
               child: TextField(
-                controller: TextEditingController(text: _currency ?? ''),
+                controller: _currency,
                 decoration: const InputDecoration(labelText: 'Currency'),
                 textCapitalization: TextCapitalization.characters,
-                onChanged: (v) => _currency = v.trim().toUpperCase(),
               ),
             ),
           ],
