@@ -142,6 +142,22 @@ void main() {
 
     test('too-short quotes prove nothing', () {
       expect(v.check([crit('ISO')], notice).allVerified, isFalse);
+      // Long enough, but only 2 words.
+      expect(v.check([crit('ISO 9001')], notice).allVerified, isFalse);
+    });
+
+    test('quotes match whole words only', () {
+      const longer =
+          'Minimum 13 years of experience. Average annual turnover of at '
+          'least EUR 1,500,000 in the last 3 years.';
+      bool ok(String q) => v.check([crit(q)], longer).allVerified;
+      expect(ok('3 years of experience'), isFalse, reason: 'it says 13');
+      expect(ok('13 years of experience'), isTrue);
+      expect(ok('at least EUR 500,000'), isFalse, reason: 'it says 1,500,000');
+      expect(ok('500,000 in the last'), isFalse);
+      expect(ok('at least EUR 1,500,000'), isTrue);
+      expect(ok('at least EUR 1.500.000'), isTrue, reason: 'same number');
+      expect(ok('ears of experience'), isFalse, reason: 'part of a word');
     });
   });
 
