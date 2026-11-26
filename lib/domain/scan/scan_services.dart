@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:firebase_ai/firebase_ai.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 
+import '../agent/gemini_factory.dart';
 import '../agent/gemini_model.dart';
 import '../agent/verdict_schema.dart';
 import 'scan.dart';
@@ -28,10 +29,10 @@ class MlKitOcr implements TextOcr {
 /// layout (what is a heading, which date is the deadline), the OCR text
 /// keeps spellings exact.
 class GeminiNoticeReader implements NoticeReader {
-  GeminiNoticeReader({GenerativeModel? model})
+  GeminiNoticeReader({GeminiClient? client})
     : _model =
-          model ??
-          FirebaseAI.googleAI().generativeModel(
+          client ??
+          GeminiFactory.create(
             model: GeminiModel.defaultModel,
             generationConfig: GenerationConfig(
               responseMimeType: 'application/json',
@@ -40,7 +41,7 @@ class GeminiNoticeReader implements NoticeReader {
             ),
           );
 
-  final GenerativeModel _model;
+  final GeminiClient _model;
 
   static const prompt = '''
 This is a photo of a printed public tender notice, plus the text OCR read

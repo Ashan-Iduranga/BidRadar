@@ -5,15 +5,16 @@ import 'package:firebase_ai/firebase_ai.dart';
 import '../../core/geo/countries.dart';
 import '../../data/models/models.dart';
 import 'ai_model.dart';
+import 'gemini_factory.dart';
 import 'verdict_schema.dart';
 
 /// Gemini through Firebase AI Logic (Gemini Developer API, free tier).
-/// App Check protects the calls, so no API key ships in the APK.
+/// App Check protects the calls (see [GeminiFactory]).
 class GeminiModel implements AiModel {
-  GeminiModel({GenerativeModel? model, this.modelName = defaultModel})
+  GeminiModel({GeminiClient? client, this.modelName = defaultModel})
     : _model =
-          model ??
-          FirebaseAI.googleAI().generativeModel(
+          client ??
+          GeminiFactory.create(
             model: modelName,
             systemInstruction: Content.system(systemPrompt),
             generationConfig: GenerationConfig(
@@ -39,7 +40,7 @@ class GeminiModel implements AiModel {
 
   @override
   final String modelName;
-  final GenerativeModel _model;
+  final GeminiClient _model;
 
   static const systemPrompt = '''
 You are BidRadar's bid/no-bid analyst for small firms.
