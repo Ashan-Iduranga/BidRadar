@@ -181,6 +181,23 @@ void main() {
     expect(r.added, 4);
   });
 
+  test('a tender that closed earlier today is not new on every sync', () async {
+    ted.result = () => [
+      tender('ok'),
+      tender('closed-today', closesIn: const Duration(hours: -1)),
+    ];
+    for (var i = 0; i < 3; i++) {
+      final r = await sync().run(company: company, profile: profile);
+      expect(r.added, i == 0 ? 2 : 0);
+      expect(r.vetoed, 0, reason: 'a closed notice is dropped, not vetoed');
+    }
+    expect(store.verdicts, isEmpty);
+    expect(
+      (await cache.all()).map((t) => t.sourceId),
+      isNot(contains('closed-today')),
+    );
+  });
+
   test('closed tenders are pruned from the cache', () async {
     await cache.upsertAll([tender('old', closesIn: const Duration(days: -3))]);
     await sync().run(company: company, profile: profile);

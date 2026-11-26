@@ -10,7 +10,7 @@ import '../agent/ai_failure.dart';
 import '../agent/bid_agent.dart';
 import '../rules/eligibility_rules.dart';
 
-/// The feed pipeline: fetch → dedup → hard rules → store.
+/// The feed pipeline: fetch → drop closed → dedup → hard rules → store → AI.
 /// Shared by "Sync now" in the UI and the workmanager background task.
 /// Tenders vetoed by the rules are recorded as NO_BID and never reach the
 /// AI (Phase 3 sends only the matched ones).
@@ -75,10 +75,18 @@ class FeedSync {
       }),
     );
 
-    // 2. Dedup into the local cache.
-    final written = await cache.upsertAll(found);
+    // 2. Drop notices that have already closed, to the minute. Sources
+    // filter by date, so a tender that closed earlier today would otherwise
+    // come back after every prune and be counted (and vetoed) as new.
+    final open = [
+      for (final t in found)
+        if (t.deadline == null || t.deadline!.toUtc().isAfter(now)) t,
+    ];
 
-    // 3. Hard rules on new tenders only.
+    // 3. Dedup into the local cache.
+    final written = await cache.upsertAll(open);
+
+    // 4. Hard rules on new tenders only.
     final matched = <Tender>[];
     final vetoes = <Verdict>[];
     for (final t in written.added) {
@@ -95,7 +103,7 @@ class FeedSync {
       }
     }
 
-    // 4. Firestore, best effort: the local cache is already updated.
+    // 5. Firestore, best effort: the local cache is already updated.
     // Offline, a commit only completes once the server confirms it; the
     // writes stay queued in Firestore's local cache, so a timeout loses
     // nothing.
@@ -111,10 +119,10 @@ class FeedSync {
       errors.add('Cloud save: ${reasonOf(e)}');
     }
 
-    // 5. Closed tenders cannot be bid on; keep the offline cache small.
+    // 6. Closed tenders cannot be bid on; keep the offline cache small.
     await cache.pruneClosedBefore(now);
 
-    // 6. AI verdicts for eligible tenders that have none yet.
+    // 7. AI verdicts for eligible tenders that have none yet.
     final judged = await _judgePending(company, profile, now, errors);
 
     final report = SyncReport(
