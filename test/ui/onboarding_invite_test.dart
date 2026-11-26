@@ -1,11 +1,14 @@
 import 'dart:async';
 
+import 'package:bidradar/core/theme/app_theme.dart';
 import 'package:bidradar/data/models/models.dart';
 import 'package:bidradar/data/providers.dart';
 import 'package:bidradar/data/repositories/company_repository.dart';
 import 'package:bidradar/ui/auth/auth_providers.dart';
+import 'package:bidradar/ui/onboarding/onboarding_page.dart';
 import 'package:bidradar/ui/onboarding/onboarding_view_model.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -39,6 +42,21 @@ class FakeCompanyRepository extends Fake implements CompanyRepository {
   Future<void> declineInvite(Invite invite) async => declined.add(invite);
 }
 
+/// Verifies on the first recheck, as if the user opened the link.
+class FakeAuthService implements AuthService {
+  var sent = 0;
+  var checks = 0;
+
+  @override
+  Future<void> sendEmailVerification() async => sent++;
+
+  @override
+  Future<bool> refreshEmailVerified() async {
+    checks++;
+    return true;
+  }
+}
+
 final invite = Invite(
   email: 'bm@firm.test',
   companyId: 'c1',
@@ -54,12 +72,17 @@ Future<void> until(bool Function() done) async {
   }
 }
 
-ProviderContainer containerFor(CompanyRepository repo, {User? user}) {
+ProviderContainer containerFor(
+  CompanyRepository repo, {
+  User? user,
+  AuthService? auth,
+}) {
   final c = ProviderContainer(
     overrides: [
       authStateProvider.overrideWith((ref) => Stream.value(user ?? FakeUser())),
       companyRepositoryProvider.overrideWithValue(repo),
       sampleCompaniesProvider.overrideWith((ref) async => const []),
+      authServiceProvider.overrideWithValue(auth ?? FakeAuthService()),
     ],
   );
   addTearDown(c.dispose);
@@ -109,5 +132,68 @@ void main() {
 
     expect(error, isNull);
     expect(repo.declined, [invite]);
+  });
+
+  test('an unverified invitee is asked to verify, not to join', () async {
+    final repo = FakeCompanyRepository(Stream.value(invite));
+    final auth = FakeAuthService();
+    final c = containerFor(
+      repo,
+      user: FakeUser(emailVerified: false),
+      auth: auth,
+    );
+    await until(
+      () => c.read(onboardingViewModelProvider).value?.invite != null,
+    );
+    final vm = c.read(onboardingViewModelProvider.notifier);
+    expect(c.read(onboardingViewModelProvider).value!.emailVerified, isFalse);
+
+    // Join and Decline are refused before the repository is touched.
+    expect(await vm.acceptInvite(invite), contains('Verify your email'));
+    expect(await vm.declineInvite(invite), contains('Verify your email'));
+    expect(repo.declined, isEmpty);
+
+    expect(await vm.resendVerification(), contains('Sent'));
+    expect(auth.sent, 1);
+
+    expect(await vm.confirmVerified(), isNull);
+    await until(
+      () => c.read(onboardingViewModelProvider).value?.emailVerified ?? false,
+    );
+    expect(c.read(onboardingViewModelProvider).value!.emailVerified, isTrue);
+  });
+
+  testWidgets('I have verified turns the card into Join', (tester) async {
+    final auth = FakeAuthService();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authStateProvider.overrideWith(
+            (ref) => Stream.value(FakeUser(emailVerified: false)),
+          ),
+          companyRepositoryProvider.overrideWithValue(
+            FakeCompanyRepository(Stream.value(invite)),
+          ),
+          sampleCompaniesProvider.overrideWith((ref) async => const []),
+          authServiceProvider.overrideWithValue(auth),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light(),
+          home: const OnboardingPage(),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(find.text('I have verified'), findsOneWidget);
+    expect(find.text('Join Firm'), findsNothing);
+    expect(find.textContaining('bm@firm.test'), findsOneWidget);
+
+    await tester.tap(find.text('I have verified'));
+    await tester.pump(const Duration(milliseconds: 300));
+
+    expect(auth.checks, 1);
+    expect(find.text('Join Firm'), findsOneWidget);
+    expect(find.text('Decline'), findsOneWidget);
+    await tester.pumpWidget(const SizedBox());
   });
 }

@@ -27,6 +27,13 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
+    // Email/password accounts are not verified by default, and an invite
+    // is addressed to an email. Without this, whoever registered the
+    // invited address first could join the company.
+    function emailVerified() {
+      return request.auth.token.get('email_verified', false) == true;
+    }
+
     // Top-level fields an update adds, removes or changes.
     function changedKeys() {
       return request.resource.data.diff(resource.data).affectedKeys();
@@ -100,10 +107,10 @@ service cloud.firestore {
         && (t.source != 'scan' || t.textHash[0:16] == t.sourceId);
     }
 
-    // The caller holds an invite to this company.
+    // The caller holds an invite to this company, at a verified email.
     function invitedTo(companyId) {
       let path = /databases/$(database)/documents/invites/$(myEmail());
-      return signedIn() && exists(path)
+      return signedIn() && emailVerified() && exists(path)
         && get(path).data.companyId == companyId;
     }
 
@@ -113,7 +120,9 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
-    // invites/{email}: owner invites a bid manager by email.
+    // invites/{email}: owner invites a bid manager by email. The invitee
+    // may see it before verifying (onboarding then asks them to verify),
+    // but only a verified invitee may accept or decline it.
     match /invites/{email} {
       allow read: if signedIn()
         && (myEmail() == email || isOwner(resource.data.companyId));
@@ -122,7 +131,8 @@ service cloud.firestore {
         && request.resource.data.role == 'bid_manager'
         && request.resource.data.invitedBy == request.auth.uid;
       allow delete: if signedIn()
-        && (myEmail() == email || isOwner(resource.data.companyId));
+        && ((myEmail() == email && emailVerified())
+          || isOwner(resource.data.companyId));
       // The owner of the inviting company may send it again. An invite
       // from another company cannot be taken over.
       allow update: if isOwner(resource.data.companyId)
