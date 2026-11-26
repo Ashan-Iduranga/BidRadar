@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/seed/sample_companies.dart';
+import '../auth/auth_providers.dart';
 import '../widgets/app_header.dart';
 import '../widgets/country_picker.dart';
 import '../widgets/state_views.dart';
@@ -51,6 +52,35 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
   }
 
+  Future<void> _decline(Invite invite) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Decline the invite from ${invite.companyName}?'),
+        content: const Text(
+          'The invite is deleted. The owner can send a new one later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Decline'),
+          ),
+        ],
+      ),
+    );
+    if (ok ?? false) {
+      await _run(
+        () => ref
+            .read(onboardingViewModelProvider.notifier)
+            .declineInvite(invite),
+      );
+    }
+  }
+
   void _create() {
     setState(() => _submitted = true);
     final valid = _formKey.currentState!.validate();
@@ -82,9 +112,10 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             ),
           ],
         ),
+        // Keep the last data on screen while the invite listener updates.
         body: switch (data) {
-          AsyncData(:final value) => _body(context, value),
-          AsyncValue(:final error?) when !data.hasValue => ErrorState(
+          AsyncValue(:final value?) => _body(context, value),
+          AsyncValue(:final error?) => ErrorState(
             message: 'Could not load setup: $error',
             onRetry: () => ref.invalidate(onboardingViewModelProvider),
           ),
@@ -106,7 +137,11 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               invite: invite,
               busy: _busy,
               onJoin: () => _run(() => vm.acceptInvite(invite)),
+              onDecline: () => _decline(invite),
             ),
+            const SizedBox(height: Space.xl),
+          ] else ...[
+            _WaitingForInvite(email: ref.watch(authStateProvider).value?.email),
             const SizedBox(height: Space.xl),
           ],
           Text('Create a company', style: theme.textTheme.titleMedium),
@@ -247,16 +282,47 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 double? parseAmount(String? s) =>
     double.tryParse((s ?? '').replaceAll(RegExp(r'[,\s]'), ''));
 
+/// Shown when there is no invite yet: it appears here by itself.
+class _WaitingForInvite extends StatelessWidget {
+  const _WaitingForInvite({required this.email});
+
+  final String? email;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.group_add_outlined, color: theme.colorScheme.primary),
+        const SizedBox(width: Space.sm),
+        Expanded(
+          child: Text(
+            'Joining a team? Ask the owner to invite '
+            '${email ?? 'your email address'}. The invite shows up here '
+            'as soon as it is sent.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _InviteCard extends StatelessWidget {
   const _InviteCard({
     required this.invite,
     required this.busy,
     required this.onJoin,
+    required this.onDecline,
   });
 
   final Invite invite;
   final bool busy;
   final VoidCallback onJoin;
+  final VoidCallback onDecline;
 
   @override
   Widget build(BuildContext context) {
@@ -283,6 +349,11 @@ class _InviteCard extends StatelessWidget {
             FilledButton(
               onPressed: busy ? null : onJoin,
               child: Text('Join ${invite.companyName}'),
+            ),
+            const SizedBox(height: Space.sm),
+            OutlinedButton(
+              onPressed: busy ? null : onDecline,
+              child: const Text('Decline'),
             ),
           ],
         ),

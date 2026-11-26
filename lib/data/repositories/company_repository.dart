@@ -26,7 +26,13 @@ abstract interface class CompanyRepository {
   /// Owner only: name, country, turnover, currency, team size.
   Future<void> updateCompany(Company company);
 
-  Future<Invite?> findInvite(String email);
+  /// The invite for [email], live: it appears as soon as the owner sends
+  /// it and disappears once it is accepted or declined.
+  Stream<Invite?> watchInvite(String email);
+
+  /// The invitee turns the invite down. It is deleted, so the owner can
+  /// invite someone else or send it again.
+  Future<void> declineInvite(Invite invite);
 
   Future<void> invite({
     required Company company,
@@ -126,11 +132,15 @@ class FirestoreCompanyRepository implements CompanyRepository {
   });
 
   @override
-  Future<Invite?> findInvite(String email) async {
-    final s = await _invites.doc(inviteKey(email)).get();
-    final data = s.data();
-    return data == null ? null : Invite.fromJson(data);
-  }
+  Stream<Invite?> watchInvite(String email) =>
+      _invites.doc(inviteKey(email)).snapshots().map((s) {
+        final data = s.data();
+        return data == null ? null : Invite.fromJson(data);
+      });
+
+  @override
+  Future<void> declineInvite(Invite invite) =>
+      _invites.doc(inviteKey(invite.email)).delete();
 
   @override
   Future<void> invite({

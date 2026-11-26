@@ -14,20 +14,31 @@ class OnboardingData {
   final List<SampleCompany> samples;
 }
 
+/// The invite for the signed-in email, live. Phone 2 can sign up first:
+/// the invite shows up as soon as the owner sends it.
+final pendingInviteProvider = StreamProvider.autoDispose<Invite?>((ref) {
+  final email = ref.watch(authStateProvider.select((a) => a.value?.email));
+  if (email == null || email.isEmpty) return Stream.value(null);
+  return ref.watch(companyRepositoryProvider).watchInvite(email);
+});
+
+final sampleCompaniesProvider = FutureProvider<List<SampleCompany>>(
+  (ref) => SampleCompanies.load(),
+);
+
 class OnboardingViewModel extends AsyncNotifier<OnboardingData> {
   @override
   Future<OnboardingData> build() async {
-    final email = ref.watch(authStateProvider).value?.email;
-    final samples = await SampleCompanies.load();
-    Invite? invite;
-    if (email != null) {
-      try {
-        invite = await ref.read(companyRepositoryProvider).findInvite(email);
-      } on Object {
-        invite = null; // No invite readable; show the create form.
-      }
+    // Watched, so the page updates when an invite arrives or goes away.
+    final samples = ref.watch(sampleCompaniesProvider.future);
+    final invite = ref.watch(pendingInviteProvider.future);
+    Invite? found;
+    try {
+      found = await invite;
+    } on Object {
+      found = null; // No invite readable; show the create form.
     }
-    return OnboardingData(invite: invite, samples: samples);
+    return OnboardingData(invite: found, samples: await samples);
   }
 
   User get _user {
@@ -75,6 +86,9 @@ class OnboardingViewModel extends AsyncNotifier<OnboardingData> {
         .acceptInvite(invite: invite, uid: _user.uid, email: _user.email ?? ''),
   );
 
+  Future<String?> declineInvite(Invite invite) =>
+      _guard(() => ref.read(companyRepositoryProvider).declineInvite(invite));
+
   Future<String?> _guard(Future<Object?> Function() action) async {
     try {
       await action();
@@ -87,7 +101,8 @@ class OnboardingViewModel extends AsyncNotifier<OnboardingData> {
   }
 }
 
+/// Auto-disposed, so the invite listener ends when onboarding is left.
 final onboardingViewModelProvider =
-    AsyncNotifierProvider<OnboardingViewModel, OnboardingData>(
+    AsyncNotifierProvider.autoDispose<OnboardingViewModel, OnboardingData>(
       OnboardingViewModel.new,
     );
