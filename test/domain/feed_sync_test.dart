@@ -252,12 +252,70 @@ void main() {
       final r2 = await withAgent().run(company: company, profile: profile);
       expect(r2.judged, 2);
     });
+
+    test('one notice that fails does not stop the others', () async {
+      // ted_ok closes first, so it is asked about first.
+      model.failFor = {'ted_ok': const FormatException('bad json')};
+      final r = await withAgent().run(company: company, profile: profile);
+      expect(r.judged, 2, reason: 'the World Bank tender is still judged');
+      expect(
+        (await verdicts.reusable('c1', tender('wb1', source: wbType, cpv: []))),
+        isNotNull,
+      );
+      expect(r.errors.single, contains('1 notice(s) could not be judged'));
+    });
+
+    test('a failing notice waits behind tenders never asked about', () async {
+      model.failFor = {'ted_ok': const FormatException('bad json')};
+      await withAgent(max: 1).run(company: company, profile: profile);
+      expect(model.asked, ['ted_ok', 'ted_ok'], reason: 'one retry');
+      model.asked.clear();
+      // Next sync: the World Bank tender was never asked about, so it goes
+      // first even though ted_ok closes sooner.
+      await withAgent(max: 1).run(company: company, profile: profile);
+      expect(model.asked, ['worldbank_wb1']);
+    });
+
+    test('a notice that keeps failing is left for a person', () async {
+      model.failFor = {'ted_ok': const FormatException('bad json')};
+      for (var i = 0; i < FeedSync.maxNoticeFailures + 2; i++) {
+        await withAgent().run(company: company, profile: profile);
+      }
+      // 2 calls per attempt (one retry), and only maxNoticeFailures attempts.
+      expect(
+        model.asked.where((id) => id == 'ted_ok'),
+        hasLength(2 * FeedSync.maxNoticeFailures),
+      );
+      final e = await verdicts.entry('c1', 'ted_ok');
+      expect(e!.failed, isTrue);
+      expect(e.failures, FeedSync.maxNoticeFailures);
+    });
+
+    test('a quota or connection problem stops the sync', () async {
+      model.failFor = {
+        'ted_ok': Exception('Quota exceeded for requests per minute'),
+      };
+      final r = await withAgent().run(company: company, profile: profile);
+      expect(r.judged, 1);
+      expect(r.errors.single, contains('AI request limit reached'));
+      expect(r.errors.single, isNot(contains('daily')));
+      // Not the notice's fault: its failure count does not grow.
+      expect((await verdicts.entry('c1', 'ted_ok'))!.failures, 0);
+    });
   });
 }
+
+const wbType = TenderSourceType.worldBank;
 
 class CountingModel implements AiModel {
   int calls = 0;
   bool fail = false;
+
+  /// Tender ID to the error this model throws for it.
+  Map<String, Object> failFor = {};
+
+  /// Tender IDs in the order they were asked about.
+  final asked = <String>[];
 
   @override
   String get modelName => 'counting';
@@ -269,7 +327,10 @@ class CountingModel implements AiModel {
     required Tender tender,
   }) async {
     calls++;
+    asked.add(tender.id);
     if (fail) throw Exception('quota');
+    final f = failFor[tender.id];
+    if (f != null) throw f;
     return const AiVerdictPayload(
       verdict: VerdictKind.noBid,
       fitScore: 20,

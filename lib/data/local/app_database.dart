@@ -49,6 +49,10 @@ class CachedVerdicts extends Table {
   DateTimeColumn get at => dateTime()();
   TextColumn get json => text()();
 
+  /// Notice-specific AI failures in a row for this notice text (malformed
+  /// or blocked answers). The sync stops retrying the notice after a few.
+  IntColumn get failures => integer().withDefault(const Constant(0))();
+
   @override
   Set<Column<Object>> get primaryKey => {companyId, tenderId};
 }
@@ -67,14 +71,20 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(syncRuns);
-      if (from < 3) await m.createTable(cachedVerdicts);
+      // createTable uses the current columns, so later columns are only
+      // added to tables that already existed.
+      if (from < 3) {
+        await m.createTable(cachedVerdicts);
+      } else if (from < 4) {
+        await m.addColumn(cachedVerdicts, cachedVerdicts.failures);
+      }
     },
   );
 }
@@ -260,35 +270,69 @@ class TenderCache {
       Tender.fromJson(jsonDecode(row.json) as Map<String, dynamic>);
 }
 
+/// One cached verdict with the facts the sync needs to decide on reuse.
+class CachedVerdictEntry {
+  const CachedVerdictEntry({
+    required this.verdict,
+    required this.textHash,
+    required this.failures,
+  });
+
+  final Verdict verdict;
+
+  /// Hash of the notice text the verdict was made on.
+  final String textHash;
+
+  /// Notice-specific AI failures in a row (see [CachedVerdicts.failures]).
+  final int failures;
+
+  /// The AI gave no usable answer, so the sync may try again.
+  bool get failed => verdict.status == VerdictStatus.aiUnavailable;
+}
+
 /// Local store of the latest AI verdict per tender.
 class VerdictCache {
   VerdictCache(this._db);
   final AppDatabase _db;
 
-  Future<void> put(Verdict v, {required String textHash}) => _db
-      .into(_db.cachedVerdicts)
-      .insertOnConflictUpdate(
-        CachedVerdictsCompanion.insert(
-          companyId: v.companyId,
-          tenderId: v.tenderId,
-          textHash: textHash,
-          at: v.at.toUtc(),
-          json: jsonEncode(v.toJson()),
-        ),
-      );
+  /// Stores [v] as the latest verdict. [failures] counts notice-specific AI
+  /// failures in a row; leave it at 0 for an answer or a manual run.
+  Future<void> put(Verdict v, {required String textHash, int failures = 0}) =>
+      _db
+          .into(_db.cachedVerdicts)
+          .insertOnConflictUpdate(
+            CachedVerdictsCompanion.insert(
+              companyId: v.companyId,
+              tenderId: v.tenderId,
+              textHash: textHash,
+              at: v.at.toUtc(),
+              json: jsonEncode(v.toJson()),
+              failures: Value(failures),
+            ),
+          );
 
-  /// A verdict that can be reused for [tender]: same notice text, and not a
-  /// failed AI call (those are retried on the next sync).
-  Future<Verdict?> reusable(String companyId, Tender tender) async {
+  /// The cached verdict for a tender, whatever its notice text.
+  Future<CachedVerdictEntry?> entry(String companyId, String tenderId) async {
     final row =
         await (_db.select(_db.cachedVerdicts)..where(
               (r) =>
-                  r.companyId.equals(companyId) & r.tenderId.equals(tender.id),
+                  r.companyId.equals(companyId) & r.tenderId.equals(tenderId),
             ))
             .getSingleOrNull();
-    if (row == null || row.textHash != tender.textHash) return null;
-    final v = _decode(row);
-    return v.status == VerdictStatus.aiUnavailable ? null : v;
+    if (row == null) return null;
+    return CachedVerdictEntry(
+      verdict: _decode(row),
+      textHash: row.textHash,
+      failures: row.failures,
+    );
+  }
+
+  /// A verdict that can be reused for [tender]: same notice text, and not a
+  /// failed AI call (those are retried on a later sync).
+  Future<Verdict?> reusable(String companyId, Tender tender) async {
+    final e = await entry(companyId, tender.id);
+    if (e == null || e.textHash != tender.textHash || e.failed) return null;
+    return e.verdict;
   }
 
   /// tenderId → latest verdict, for the feed.

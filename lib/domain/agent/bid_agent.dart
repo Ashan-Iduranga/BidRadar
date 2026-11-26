@@ -2,9 +2,20 @@ import 'dart:async';
 
 import '../../core/logging/log.dart';
 import '../../data/models/models.dart';
+import 'ai_failure.dart';
 import 'ai_model.dart';
 import 'guards.dart';
 import 'quote_verifier.dart';
+
+/// A verdict plus, when the AI gave no usable answer, why not.
+class AgentOutcome {
+  const AgentOutcome(this.verdict, [this.failure]);
+  final Verdict verdict;
+
+  /// Null when the AI answered (accepted or quotes rejected) or the rules
+  /// decided without it.
+  final AiFailure? failure;
+}
 
 /// Turns a tender into an audited [Verdict]:
 /// rules veto → NO_BID without calling the AI; otherwise ask the model
@@ -35,14 +46,29 @@ class BidAgent {
     required CompanyProfile profile,
     required Tender tender,
     required RulesResult rules,
+  }) async => (await assess(
+    company: company,
+    profile: profile,
+    tender: tender,
+    rules: rules,
+  )).verdict;
+
+  /// Like [judge], and also says why the AI gave no usable answer, so the
+  /// sync can tell a problem with one notice from one that affects all.
+  Future<AgentOutcome> assess({
+    required Company company,
+    required CompanyProfile profile,
+    required Tender tender,
+    required RulesResult rules,
   }) async {
     final now = _clock().toUtc();
-    if (!rules.passed) return rulesVerdict(company.id, tender, rules, now);
+    if (!rules.passed) {
+      return AgentOutcome(rulesVerdict(company.id, tender, rules, now));
+    }
 
     var failures = 0;
     var quoteRetried = false;
     var badAnswers = 0;
-    Object? lastError;
 
     while (true) {
       final AiVerdictPayload payload;
@@ -50,18 +76,20 @@ class BidAgent {
         payload = await model
             .judgeTender(company: company, profile: profile, tender: tender)
             .timeout(timeout);
-      } on FormatException catch (e) {
-        // Malformed answer: ask once more, then give up.
-        Log.warn('agent', 'bad AI answer: ${e.message}');
-        if (++badAnswers > 1) {
-          return _unavailable(company, tender, rules, now, 'invalid answer');
-        }
-        continue;
       } on Object catch (e) {
-        lastError = e;
+        final kind = AiFailure.of(e);
+        if (kind == AiFailure.notice) {
+          // Malformed or blocked answer: ask once more, then give up on this
+          // notice only.
+          Log.warn('agent', 'unusable AI answer: $e');
+          if (++badAnswers > 1) {
+            return _unavailable(company, tender, rules, now, kind, e);
+          }
+          continue;
+        }
         Log.warn('agent', 'AI call failed (${failures + 1}): $e');
         if (++failures > maxRetries) {
-          return _unavailable(company, tender, rules, now, _reason(lastError));
+          return _unavailable(company, tender, rules, now, kind, e);
         }
         await _sleep(Duration(seconds: failures));
         continue;
@@ -95,12 +123,14 @@ class BidAgent {
 
       if (!check.allVerified) {
         // Twice unverifiable: a person must read the notice.
-        return _copy(
-          base,
-          status: VerdictStatus.quotesRejected,
-          note:
-              '${check.failed.length} quote(s) could not be found in the '
-              'notice, so the AI answer is not trusted.',
+        return AgentOutcome(
+          _copy(
+            base,
+            status: VerdictStatus.quotesRejected,
+            note:
+                '${check.failed.length} quote(s) could not be found in the '
+                'notice, so the AI answer is not trusted.',
+          ),
         );
       }
       final g = guards.apply(
@@ -110,7 +140,7 @@ class BidAgent {
         criteria: check.criteria,
         rules: rules,
       );
-      return _copy(base, verdict: g.verdict, note: g.reason);
+      return AgentOutcome(_copy(base, verdict: g.verdict, note: g.reason));
     }
   }
 
@@ -136,25 +166,31 @@ class BidAgent {
     note: r.vetoes.first.message,
   );
 
-  Verdict _unavailable(
+  AgentOutcome _unavailable(
     Company c,
     Tender t,
     RulesResult r,
     DateTime at,
-    String why,
-  ) => Verdict(
-    id: 'ai_${c.id}_${t.id}_${at.millisecondsSinceEpoch}',
-    tenderId: t.id,
-    companyId: c.id,
-    verdict: VerdictKind.review,
-    fitScore: 0,
-    criteria: const [],
-    missingDocs: const [],
-    rulesResult: r,
-    status: VerdictStatus.aiUnavailable,
-    model: model.modelName,
-    at: at,
-    note: 'AI unavailable ($why). Decide manually.',
+    AiFailure kind,
+    Object error,
+  ) => AgentOutcome(
+    Verdict(
+      id: 'ai_${c.id}_${t.id}_${at.millisecondsSinceEpoch}',
+      tenderId: t.id,
+      companyId: c.id,
+      verdict: VerdictKind.review,
+      fitScore: 0,
+      criteria: const [],
+      missingDocs: const [],
+      rulesResult: r,
+      status: VerdictStatus.aiUnavailable,
+      model: model.modelName,
+      at: at,
+      note:
+          'AI unavailable (${AiFailure.reason(kind, error)}). '
+          'Decide manually.',
+    ),
+    kind,
   );
 
   static Verdict _copy(
@@ -178,16 +214,4 @@ class BidAgent {
     at: v.at,
     note: note ?? v.note,
   );
-
-  static String _reason(Object? e) {
-    final s = '$e';
-    if (e is TimeoutException) return 'timed out';
-    if (s.contains('QuotaExceeded') || s.contains('quota')) {
-      return 'daily AI quota used up';
-    }
-    if (s.contains('SocketException') || s.contains('Failed host lookup')) {
-      return 'no connection';
-    }
-    return 'service error';
-  }
 }

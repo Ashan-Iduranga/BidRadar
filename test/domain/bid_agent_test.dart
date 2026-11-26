@@ -1,10 +1,15 @@
+import 'dart:io';
+
 import 'package:bidradar/data/models/models.dart';
+import 'package:bidradar/domain/agent/ai_failure.dart';
 import 'package:bidradar/domain/agent/ai_model.dart';
 import 'package:bidradar/domain/agent/bid_agent.dart';
 import 'package:bidradar/domain/agent/gemini_model.dart';
 import 'package:bidradar/domain/agent/guards.dart';
 import 'package:bidradar/domain/agent/quote_verifier.dart';
 import 'package:bidradar/domain/rules/eligibility_rules.dart';
+import 'package:firebase_ai/firebase_ai.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 final now = DateTime.utc(2026, 11, 2, 12);
@@ -247,6 +252,72 @@ void main() {
       expect(v.status, VerdictStatus.aiUnavailable);
       expect(v.note, contains('invalid answer'));
     });
+  });
+
+  group('AI failures', () {
+    test('notice-specific failures are told apart from global ones', () {
+      expect(AiFailure.of(const FormatException('bad json')), AiFailure.notice);
+      expect(AiFailure.of(TypeError()), AiFailure.notice);
+      expect(
+        AiFailure.of(
+          FirebaseAIException('Candidate was blocked due to recitation'),
+        ),
+        AiFailure.notice,
+      );
+      expect(
+        AiFailure.of(FirebaseAIException('Response was blocked due to SAFETY')),
+        AiFailure.notice,
+      );
+      expect(
+        AiFailure.of(const SocketException('Failed host lookup')),
+        AiFailure.offline,
+      );
+      expect(
+        AiFailure.of(
+          FirebaseException(plugin: 'firebase_app_check', code: 'unknown'),
+        ),
+        AiFailure.auth,
+      );
+      expect(AiFailure.of(Exception('503')), AiFailure.service);
+      for (final f in AiFailure.values) {
+        expect(f.stopsSync, f != AiFailure.notice);
+      }
+    });
+
+    test('only an explicit daily limit is called the daily quota', () {
+      expect(
+        AiFailure.of(QuotaExceeded('Quota exceeded: requests per day')),
+        AiFailure.dailyQuota,
+      );
+      expect(
+        AiFailure.of(QuotaExceeded('Quota exceeded: requests per minute')),
+        AiFailure.rateLimit,
+      );
+      expect(
+        AiFailure.of(QuotaExceeded('Resource has been exhausted')),
+        AiFailure.rateLimit,
+      );
+    });
+
+    test(
+      'a blocked answer: one retry, then ai_unavailable for this notice',
+      () async {
+        final blocked = FirebaseAIException(
+          'Candidate was blocked due to SAFETY',
+        );
+        final m = FakeModel([blocked]);
+        final o = await agent(m).assess(
+          company: company,
+          profile: profile,
+          tender: tender(),
+          rules: rulesFor(tender()),
+        );
+        expect(m.calls, 2);
+        expect(o.failure, AiFailure.notice);
+        expect(o.verdict.status, VerdictStatus.aiUnavailable);
+        expect(o.verdict.note, contains('safety filter'));
+      },
+    );
   });
 
   group('Rule integrity: an AI that always says BID', () {

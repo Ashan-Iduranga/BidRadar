@@ -960,6 +960,18 @@ class $CachedVerdictsTable extends CachedVerdicts
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
+  static const VerificationMeta _failuresMeta = const VerificationMeta(
+    'failures',
+  );
+  @override
+  late final GeneratedColumn<int> failures = GeneratedColumn<int>(
+    'failures',
+    aliasedName,
+    false,
+    type: DriftSqlType.int,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
+  );
   @override
   List<GeneratedColumn> get $columns => [
     companyId,
@@ -967,6 +979,7 @@ class $CachedVerdictsTable extends CachedVerdicts
     textHash,
     at,
     json,
+    failures,
   ];
   @override
   String get aliasedName => _alias ?? actualTableName;
@@ -1017,6 +1030,12 @@ class $CachedVerdictsTable extends CachedVerdicts
     } else if (isInserting) {
       context.missing(_jsonMeta);
     }
+    if (data.containsKey('failures')) {
+      context.handle(
+        _failuresMeta,
+        failures.isAcceptableOrUnknown(data['failures']!, _failuresMeta),
+      );
+    }
     return context;
   }
 
@@ -1046,6 +1065,10 @@ class $CachedVerdictsTable extends CachedVerdicts
         DriftSqlType.string,
         data['${effectivePrefix}json'],
       )!,
+      failures: attachedDatabase.typeMapping.read(
+        DriftSqlType.int,
+        data['${effectivePrefix}failures'],
+      )!,
     );
   }
 
@@ -1061,12 +1084,17 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
   final String textHash;
   final DateTime at;
   final String json;
+
+  /// Notice-specific AI failures in a row for this notice text (malformed
+  /// or blocked answers). The sync stops retrying the notice after a few.
+  final int failures;
   const CachedVerdict({
     required this.companyId,
     required this.tenderId,
     required this.textHash,
     required this.at,
     required this.json,
+    required this.failures,
   });
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1076,6 +1104,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
     map['text_hash'] = Variable<String>(textHash);
     map['at'] = Variable<DateTime>(at);
     map['json'] = Variable<String>(json);
+    map['failures'] = Variable<int>(failures);
     return map;
   }
 
@@ -1086,6 +1115,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       textHash: Value(textHash),
       at: Value(at),
       json: Value(json),
+      failures: Value(failures),
     );
   }
 
@@ -1100,6 +1130,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       textHash: serializer.fromJson<String>(json['textHash']),
       at: serializer.fromJson<DateTime>(json['at']),
       json: serializer.fromJson<String>(json['json']),
+      failures: serializer.fromJson<int>(json['failures']),
     );
   }
   @override
@@ -1111,6 +1142,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       'textHash': serializer.toJson<String>(textHash),
       'at': serializer.toJson<DateTime>(at),
       'json': serializer.toJson<String>(json),
+      'failures': serializer.toJson<int>(failures),
     };
   }
 
@@ -1120,12 +1152,14 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
     String? textHash,
     DateTime? at,
     String? json,
+    int? failures,
   }) => CachedVerdict(
     companyId: companyId ?? this.companyId,
     tenderId: tenderId ?? this.tenderId,
     textHash: textHash ?? this.textHash,
     at: at ?? this.at,
     json: json ?? this.json,
+    failures: failures ?? this.failures,
   );
   CachedVerdict copyWithCompanion(CachedVerdictsCompanion data) {
     return CachedVerdict(
@@ -1134,6 +1168,7 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
       textHash: data.textHash.present ? data.textHash.value : this.textHash,
       at: data.at.present ? data.at.value : this.at,
       json: data.json.present ? data.json.value : this.json,
+      failures: data.failures.present ? data.failures.value : this.failures,
     );
   }
 
@@ -1144,13 +1179,15 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
           ..write('tenderId: $tenderId, ')
           ..write('textHash: $textHash, ')
           ..write('at: $at, ')
-          ..write('json: $json')
+          ..write('json: $json, ')
+          ..write('failures: $failures')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(companyId, tenderId, textHash, at, json);
+  int get hashCode =>
+      Object.hash(companyId, tenderId, textHash, at, json, failures);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1159,7 +1196,8 @@ class CachedVerdict extends DataClass implements Insertable<CachedVerdict> {
           other.tenderId == this.tenderId &&
           other.textHash == this.textHash &&
           other.at == this.at &&
-          other.json == this.json);
+          other.json == this.json &&
+          other.failures == this.failures);
 }
 
 class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
@@ -1168,6 +1206,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
   final Value<String> textHash;
   final Value<DateTime> at;
   final Value<String> json;
+  final Value<int> failures;
   final Value<int> rowid;
   const CachedVerdictsCompanion({
     this.companyId = const Value.absent(),
@@ -1175,6 +1214,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     this.textHash = const Value.absent(),
     this.at = const Value.absent(),
     this.json = const Value.absent(),
+    this.failures = const Value.absent(),
     this.rowid = const Value.absent(),
   });
   CachedVerdictsCompanion.insert({
@@ -1183,6 +1223,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     required String textHash,
     required DateTime at,
     required String json,
+    this.failures = const Value.absent(),
     this.rowid = const Value.absent(),
   }) : companyId = Value(companyId),
        tenderId = Value(tenderId),
@@ -1195,6 +1236,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     Expression<String>? textHash,
     Expression<DateTime>? at,
     Expression<String>? json,
+    Expression<int>? failures,
     Expression<int>? rowid,
   }) {
     return RawValuesInsertable({
@@ -1203,6 +1245,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
       if (textHash != null) 'text_hash': textHash,
       if (at != null) 'at': at,
       if (json != null) 'json': json,
+      if (failures != null) 'failures': failures,
       if (rowid != null) 'rowid': rowid,
     });
   }
@@ -1213,6 +1256,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     Value<String>? textHash,
     Value<DateTime>? at,
     Value<String>? json,
+    Value<int>? failures,
     Value<int>? rowid,
   }) {
     return CachedVerdictsCompanion(
@@ -1221,6 +1265,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
       textHash: textHash ?? this.textHash,
       at: at ?? this.at,
       json: json ?? this.json,
+      failures: failures ?? this.failures,
       rowid: rowid ?? this.rowid,
     );
   }
@@ -1243,6 +1288,9 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
     if (json.present) {
       map['json'] = Variable<String>(json.value);
     }
+    if (failures.present) {
+      map['failures'] = Variable<int>(failures.value);
+    }
     if (rowid.present) {
       map['rowid'] = Variable<int>(rowid.value);
     }
@@ -1257,6 +1305,7 @@ class CachedVerdictsCompanion extends UpdateCompanion<CachedVerdict> {
           ..write('textHash: $textHash, ')
           ..write('at: $at, ')
           ..write('json: $json, ')
+          ..write('failures: $failures, ')
           ..write('rowid: $rowid')
           ..write(')'))
         .toString();
@@ -1779,6 +1828,7 @@ typedef $$CachedVerdictsTableCreateCompanionBuilder =
       required String textHash,
       required DateTime at,
       required String json,
+      Value<int> failures,
       Value<int> rowid,
     });
 typedef $$CachedVerdictsTableUpdateCompanionBuilder =
@@ -1788,6 +1838,7 @@ typedef $$CachedVerdictsTableUpdateCompanionBuilder =
       Value<String> textHash,
       Value<DateTime> at,
       Value<String> json,
+      Value<int> failures,
       Value<int> rowid,
     });
 
@@ -1822,6 +1873,11 @@ class $$CachedVerdictsTableFilterComposer
 
   ColumnFilters<String> get json => $composableBuilder(
     column: $table.json,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<int> get failures => $composableBuilder(
+    column: $table.failures,
     builder: (column) => ColumnFilters(column),
   );
 }
@@ -1859,6 +1915,11 @@ class $$CachedVerdictsTableOrderingComposer
     column: $table.json,
     builder: (column) => ColumnOrderings(column),
   );
+
+  ColumnOrderings<int> get failures => $composableBuilder(
+    column: $table.failures,
+    builder: (column) => ColumnOrderings(column),
+  );
 }
 
 class $$CachedVerdictsTableAnnotationComposer
@@ -1884,6 +1945,9 @@ class $$CachedVerdictsTableAnnotationComposer
 
   GeneratedColumn<String> get json =>
       $composableBuilder(column: $table.json, builder: (column) => column);
+
+  GeneratedColumn<int> get failures =>
+      $composableBuilder(column: $table.failures, builder: (column) => column);
 }
 
 class $$CachedVerdictsTableTableManager
@@ -1924,6 +1988,7 @@ class $$CachedVerdictsTableTableManager
                 Value<String> textHash = const Value.absent(),
                 Value<DateTime> at = const Value.absent(),
                 Value<String> json = const Value.absent(),
+                Value<int> failures = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedVerdictsCompanion(
                 companyId: companyId,
@@ -1931,6 +1996,7 @@ class $$CachedVerdictsTableTableManager
                 textHash: textHash,
                 at: at,
                 json: json,
+                failures: failures,
                 rowid: rowid,
               ),
           createCompanionCallback:
@@ -1940,6 +2006,7 @@ class $$CachedVerdictsTableTableManager
                 required String textHash,
                 required DateTime at,
                 required String json,
+                Value<int> failures = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
               }) => CachedVerdictsCompanion.insert(
                 companyId: companyId,
@@ -1947,6 +2014,7 @@ class $$CachedVerdictsTableTableManager
                 textHash: textHash,
                 at: at,
                 json: json,
+                failures: failures,
                 rowid: rowid,
               ),
           withReferenceMapper: (p0) => p0
