@@ -404,11 +404,9 @@ class _CompanySheetState extends ConsumerState<_CompanySheet> {
         );
     if (!mounted) return;
     setState(() => _saving = false);
-    if (err == null) {
-      Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    }
+    final messenger = ScaffoldMessenger.of(context);
+    if (err == null || err == kSavedOnPhone) Navigator.pop(context);
+    if (err != null) messenger.showSnackBar(SnackBar(content: Text(err)));
   }
 
   @override

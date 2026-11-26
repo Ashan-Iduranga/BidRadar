@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -49,6 +50,15 @@ abstract final class ProfileInput {
     return (value: s, error: null);
   }
 }
+
+/// How long a profile or company save waits for Firestore to confirm.
+/// Offline, Firestore keeps the write on the phone and never confirms it
+/// until the connection is back, so the wait has to end somewhere.
+const kSaveWait = Duration(seconds: 10);
+
+/// Shown when the wait ends: the change is saved locally and will sync.
+const kSavedOnPhone =
+    'Saved on this phone. It will sync when you are back online.';
 
 @immutable
 class ProfileEditState {
@@ -141,15 +151,19 @@ class ProfileViewModel extends Notifier<ProfileEditState> {
 
   void discard() => state = state.copyWith(draft: state.saved);
 
-  /// Returns an error message, or null when saved.
+  /// Returns null when saved, [kSavedOnPhone] when Firestore has not
+  /// confirmed in time (offline), or an error message.
   Future<String?> save() async {
     final d = state.draft;
     if (d == null) return 'Nothing to save.';
     state = state.copyWith(saving: true);
     try {
-      await ref.read(profileRepositoryProvider).save(d);
+      await ref.read(profileRepositoryProvider).save(d).timeout(kSaveWait);
       state = ProfileEditState(saved: d, draft: d);
       return null;
+    } on TimeoutException {
+      state = ProfileEditState(saved: d, draft: d);
+      return kSavedOnPhone;
     } on FirebaseException catch (e) {
       state = state.copyWith(saving: false);
       return e.code == 'permission-denied'
@@ -158,10 +172,17 @@ class ProfileViewModel extends Notifier<ProfileEditState> {
     }
   }
 
+  /// Returns null when saved, [kSavedOnPhone] when Firestore has not
+  /// confirmed in time (offline), or an error message.
   Future<String?> updateCompany(Company c) async {
     try {
-      await ref.read(companyRepositoryProvider).updateCompany(c);
+      await ref
+          .read(companyRepositoryProvider)
+          .updateCompany(c)
+          .timeout(kSaveWait);
       return null;
+    } on TimeoutException {
+      return kSavedOnPhone;
     } on FirebaseException catch (e) {
       return 'Could not save (${e.code}).';
     }
