@@ -16,6 +16,10 @@ class NotificationService {
   bool _ready = false;
 
   static const newTendersId = 1001;
+
+  /// Drawable for the status bar icon. Kept in release builds by
+  /// res/raw/keep.xml, because the plugin looks it up by name.
+  static const statusBarIcon = 'ic_stat_bidradar';
   static bool _tzReady = false;
   static const _deadlineChannel = AndroidNotificationDetails(
     'deadlines',
@@ -36,7 +40,9 @@ class NotificationService {
     if (_ready) return;
     await _plugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // A white-on-transparent radar (res/drawable/ic_stat_bidradar.xml);
+        // the full-colour launcher icon shows as a blank blob.
+        android: AndroidInitializationSettings(statusBarIcon),
       ),
     );
     _ready = true;
