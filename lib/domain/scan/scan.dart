@@ -81,6 +81,9 @@ abstract interface class NoticeReader {
   });
 }
 
+/// The parts of the scan review form a problem can belong to.
+enum ScanField { title, buyer, deadline, text }
+
 /// The confirmed scan, ready to become a tender.
 @immutable
 class ScanDraft {
@@ -106,13 +109,17 @@ class ScanDraft {
   final String? currency;
   final List<String> cpvCodes;
 
+  /// What still blocks saving, by the field the form shows it under.
+  Map<ScanField, String> get fieldProblems => {
+    if (title.trim().isEmpty) ScanField.title: 'Add a title.',
+    if (buyer.trim().isEmpty) ScanField.buyer: 'Confirm the buyer.',
+    if (deadline == null) ScanField.deadline: 'Confirm the deadline.',
+    if (ocrText.trim().length < 40)
+      ScanField.text: 'No readable text. Retake the photo.',
+  };
+
   /// What still blocks saving, in the order the form shows it.
-  List<String> get problems => [
-    if (title.trim().isEmpty) 'Add a title.',
-    if (buyer.trim().isEmpty) 'Confirm the buyer.',
-    if (deadline == null) 'Confirm the deadline.',
-    if (ocrText.trim().length < 40) 'No readable text. Retake the photo.',
-  ];
+  List<String> get problems => fieldProblems.values.toList();
 
   /// The scanned notice as a [Tender]. The OCR text is the notice text, so
   /// the AI's quotes are checked against what was actually printed. The id

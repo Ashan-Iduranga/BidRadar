@@ -263,16 +263,22 @@ class _ReviewForm extends ConsumerStatefulWidget {
 }
 
 class _ReviewFormState extends ConsumerState<_ReviewForm> {
-  late final _title = TextEditingController(text: widget.review.read.title);
-  late final _buyer = TextEditingController(text: widget.review.read.buyer);
+  /// What the user typed before a save that did not go through, if any.
+  late final ScanDraft? _typed = widget.review.draft;
+  late final ScannedNotice _read = widget.review.read;
+  late final _title = TextEditingController(text: _typed?.title ?? _read.title);
+  late final _buyer = TextEditingController(text: _typed?.buyer ?? _read.buyer);
   late final _turnover = TextEditingController(
-    text: widget.review.read.minTurnover?.toStringAsFixed(0) ?? '',
+    text: (_typed?.minTurnover ?? _read.minTurnover)?.toStringAsFixed(0) ?? '',
   );
-  late DateTime? _deadline = widget.review.read.deadline;
-  late String _country = widget.review.read.country;
-  late String? _currency = widget.review.read.currency;
-  bool _deadlineConfirmed = false;
+  late DateTime? _deadline = _typed?.deadline ?? _read.deadline;
+  late String _country = _typed?.country ?? _read.country;
+  late String? _currency = _typed?.currency ?? _read.currency;
+  late bool _deadlineConfirmed = _typed?.deadline != null;
   bool _showText = false;
+
+  /// Shown under the field they belong to until the user changes it.
+  Map<ScanField, String> _problems = const {};
 
   @override
   void dispose() {
@@ -305,7 +311,42 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
         time?.minute ?? 59,
       );
       _deadlineConfirmed = true;
+      _problems = {..._problems}..remove(ScanField.deadline);
     });
+  }
+
+  void _clear(ScanField field) {
+    if (_problems.containsKey(field)) {
+      setState(() => _problems = {..._problems}..remove(field));
+    }
+  }
+
+  ScanDraft _draft() => ScanDraft(
+    title: _title.text,
+    buyer: _buyer.text,
+    deadline: _deadline,
+    country: _country,
+    ocrText: widget.review.ocrText,
+    requirements: _read.requirements,
+    minTurnover: parseAmount(_turnover.text),
+    currency: (_currency?.length == 3) ? _currency : null,
+    cpvCodes: _read.cpvCodes,
+  );
+
+  /// Problems stay on the form, next to their fields, with everything the
+  /// user typed. Only a draft without problems is saved.
+  void _save() {
+    final draft = _draft();
+    final problems = {
+      if (draft.deadline != null && !_deadlineConfirmed)
+        ScanField.deadline: 'Tap to confirm the date and time.',
+      ...draft.fieldProblems,
+    };
+    if (problems.isNotEmpty) {
+      setState(() => _problems = problems);
+      return;
+    }
+    ref.read(scanViewModelProvider.notifier).save(draft);
   }
 
   @override
@@ -313,11 +354,19 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
     final r = widget.review;
     final theme = Theme.of(context);
     final vm = ref.read(scanViewModelProvider.notifier);
-    final turnover = parseAmount(_turnover.text);
+    final error = theme.colorScheme.error;
 
     return ListView(
       padding: const EdgeInsets.all(Space.gutter),
       children: [
+        if (r.error != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Space.md),
+            child: Text(
+              r.error!,
+              style: theme.textTheme.bodyMedium?.copyWith(color: error),
+            ),
+          ),
         if (r.aiFailed)
           const Padding(
             padding: EdgeInsets.only(bottom: Space.md),
@@ -330,16 +379,22 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
         const SizedBox(height: Space.md),
         TextField(
           controller: _title,
-          decoration: const InputDecoration(labelText: 'What is being bought'),
+          decoration: InputDecoration(
+            labelText: 'What is being bought',
+            errorText: _problems[ScanField.title],
+          ),
           maxLines: null,
+          onChanged: (_) => _clear(ScanField.title),
         ),
         const SizedBox(height: Space.lg),
         TextField(
           controller: _buyer,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Buyer',
             helperText: 'Check this against the notice.',
+            errorText: _problems[ScanField.buyer],
           ),
+          onChanged: (_) => _clear(ScanField.buyer),
         ),
         const SizedBox(height: Space.lg),
         InkWell(
@@ -350,6 +405,7 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
               helperText: _deadlineConfirmed
                   ? 'Confirmed.'
                   : 'Tap to confirm the date and time.',
+              errorText: _problems[ScanField.deadline],
               suffixIcon: Icon(
                 _deadlineConfirmed ? Icons.check_circle : Icons.edit_calendar,
               ),
@@ -412,33 +468,21 @@ class _ReviewFormState extends ConsumerState<_ReviewForm> {
         ),
         if (_showText) SelectableText(r.ocrText),
         const SizedBox(height: Space.xl),
+        if (_problems.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: Space.md),
+            child: Text(
+              _problems[ScanField.text] ?? 'Fix the fields marked above.',
+              style: theme.textTheme.bodyMedium?.copyWith(color: error),
+            ),
+          ),
         FilledButton.icon(
           icon: const Icon(Icons.auto_awesome_outlined),
           label: const Text('Save and judge'),
           style: FilledButton.styleFrom(
             minimumSize: const Size.fromHeight(kMinTouchTarget),
           ),
-          onPressed: () {
-            if (!_deadlineConfirmed) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Confirm the deadline first.')),
-              );
-              return;
-            }
-            vm.save(
-              ScanDraft(
-                title: _title.text,
-                buyer: _buyer.text,
-                deadline: _deadline,
-                country: _country,
-                ocrText: r.ocrText,
-                requirements: r.read.requirements,
-                minTurnover: turnover,
-                currency: (_currency?.length == 3) ? _currency : null,
-                cpvCodes: r.read.cpvCodes,
-              ),
-            );
-          },
+          onPressed: _save,
         ),
         const SizedBox(height: Space.sm),
         OutlinedButton(onPressed: vm.reset, child: const Text('Retake')),
