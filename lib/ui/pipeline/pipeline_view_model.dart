@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/logging/log.dart';
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
 import '../../domain/pipeline/bid_workflow.dart';
@@ -41,6 +42,9 @@ final pendingApprovalsProvider = Provider<List<Bid>>((ref) {
 class BidActions extends Notifier<void> {
   @override
   void build() {}
+
+  /// How long to wait for a Firestore read before going on without it.
+  static const readTimeout = Duration(seconds: 6);
 
   String? get _uid => ref.read(authStateProvider).value?.uid;
   DateTime get _now => DateTime.now().toUtc();
@@ -116,10 +120,48 @@ class BidActions extends Notifier<void> {
   Future<String?> remove(Bid b) =>
       _run(() => ref.read(bidRepositoryProvider).delete(b.id));
 
+  /// Makes sure this phone has the bid's tender, and the company's verdict
+  /// on it, before Tender detail opens. Both come from Firestore when this
+  /// phone never synced them, for example a notice the other phone
+  /// scanned. Best effort: on failure Tender detail says it is missing.
+  Future<void> loadTender(Bid b) async {
+    try {
+      final cache = ref.read(tenderCacheProvider);
+      if (await cache.byId(b.tenderId) == null) {
+        final shared = await ref
+            .read(sharedRecordsProvider)
+            .tender(b.tenderId)
+            .timeout(readTimeout);
+        if (shared == null) return;
+        await cache.upsertAll([shared]);
+      }
+      await _verdictFor(b);
+    } on Object catch (e) {
+      Log.warn('pipeline', 'could not load tender ${b.tenderId}: $e');
+    }
+  }
+
+  /// The company's verdict on the bid's tender: from this phone, else the
+  /// newest one in Firestore (then kept on this phone too). The checklist
+  /// an approval builds comes from it.
   Future<Verdict?> _verdictFor(Bid b) async {
-    final companyId = ref.read(currentCompanyIdProvider).value;
-    if (companyId == null) return null;
-    return ref.read(verdictCacheProvider).watchOne(companyId, b.tenderId).first;
+    final verdicts = ref.read(verdictCacheProvider);
+    final local = await verdicts.watchOne(b.companyId, b.tenderId).first;
+    if (local != null) return local;
+    try {
+      final v = await ref
+          .read(sharedRecordsProvider)
+          .latestVerdict(b.companyId, b.tenderId)
+          .timeout(readTimeout);
+      final tender = await ref.read(tenderCacheProvider).byId(b.tenderId);
+      if (v != null && tender != null) {
+        await verdicts.put(v, textHash: tender.textHash);
+      }
+      return v;
+    } on Object catch (e) {
+      Log.warn('pipeline', 'no verdict for ${b.tenderId}: $e');
+      return null;
+    }
   }
 
   /// Writes only what changed from [before] to [after].

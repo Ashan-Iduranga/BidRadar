@@ -111,3 +111,40 @@ class FirestoreBidRepository implements BidRepository {
       ]),
   };
 }
+
+/// Shared tenders and the verdict audit trail, read back from Firestore
+/// when this phone does not have them: for example a tender the bid
+/// manager scanned on the other phone. The sync and Scan write them.
+abstract interface class SharedRecords {
+  /// `tenders/{tenderId}`, or null.
+  Future<Tender?> tender(String tenderId);
+
+  /// The newest verdict [companyId] has on [tenderId], or null.
+  Future<Verdict?> latestVerdict(String companyId, String tenderId);
+}
+
+class FirestoreSharedRecords implements SharedRecords {
+  FirestoreSharedRecords(this._db);
+  final FirebaseFirestore _db;
+
+  @override
+  Future<Tender?> tender(String tenderId) async {
+    final data = (await _db.collection('tenders').doc(tenderId).get()).data();
+    return data == null ? null : Tender.fromJson(data);
+  }
+
+  /// Filters on companyId so the rules (members only) can check the
+  /// query, and on tenderId. 2 equality filters need no composite index;
+  /// the newest is picked here.
+  @override
+  Future<Verdict?> latestVerdict(String companyId, String tenderId) async {
+    final s = await _db
+        .collection('verdicts')
+        .where('companyId', isEqualTo: companyId)
+        .where('tenderId', isEqualTo: tenderId)
+        .get();
+    final all = [for (final d in s.docs) Verdict.fromJson(d.data())];
+    if (all.isEmpty) return null;
+    return all.reduce((a, b) => b.at.isAfter(a.at) ? b : a);
+  }
+}
