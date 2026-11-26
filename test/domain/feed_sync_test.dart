@@ -342,6 +342,7 @@ class CountingModel implements AiModel {
     required Company company,
     required CompanyProfile profile,
     required Tender tender,
+    List<String> rejectedQuotes = const [],
   }) async {
     calls++;
     asked.add(tender.id);

@@ -50,11 +50,15 @@ abstract interface class AiModel {
   /// Model identifier stored on every verdict for the audit trail.
   String get modelName;
 
-  /// Judge [tender] for [profile]. Implementations must enforce the 20 s
-  /// timeout and throw on failure; retries live in the BidAgent.
+  /// Judge [tender] for [profile]. Implementations throw on failure; the
+  /// BidAgent enforces the timeout and owns the retries.
+  ///
+  /// [rejectedQuotes] are quotes from the previous answer that were not
+  /// found in the notice word for word, so the model can correct them.
   Future<AiVerdictPayload> judgeTender({
     required Company company,
     required CompanyProfile profile,
     required Tender tender,
+    List<String> rejectedQuotes = const [],
   });
 }

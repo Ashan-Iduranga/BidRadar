@@ -41,7 +41,10 @@ class FeedSync {
 
   /// Tenders sent to Gemini per sync, to stay inside the free-tier quota.
   /// Tenders not judged this time are judged on later syncs, soonest
-  /// deadline first.
+  /// deadline first. Each tender uses at most 3 calls, so a sync makes at
+  /// most 15. There is no pause between tenders: the O2 evaluation made
+  /// about 40 calls back to back without hitting a request limit, and if
+  /// one is hit the sync stops and the rest wait for the next sync.
   final int maxAiPerSync;
 
   /// After this many notice-specific AI failures in a row (malformed or

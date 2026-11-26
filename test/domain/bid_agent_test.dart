@@ -79,6 +79,9 @@ class FakeModel implements AiModel {
   final List<Object> script;
   int calls = 0;
 
+  /// The rejectedQuotes passed on each call.
+  final rejected = <List<String>>[];
+
   @override
   String get modelName => 'fake-model';
 
@@ -87,9 +90,11 @@ class FakeModel implements AiModel {
     required Company company,
     required CompanyProfile profile,
     required Tender tender,
+    List<String> rejectedQuotes = const [],
   }) async {
     final next = script[calls < script.length ? calls : script.length - 1];
     calls++;
+    rejected.add(rejectedQuotes);
     if (next is AiVerdictPayload) return next;
     if (next is Duration) {
       await Future<void>.delayed(next);
@@ -310,6 +315,48 @@ void main() {
       expect((await judge(m, tender())).status, VerdictStatus.accepted);
     });
 
+    test('never more than 3 model calls per tender in total', () async {
+      final bad = payload(criteria: [crit('Bidders need ten engineers')]);
+      final m = FakeModel([
+        Exception('503'),
+        const FormatException('bad json'),
+        bad,
+        payload(),
+      ]);
+      final v = await judge(m, tender());
+      expect(m.calls, 3);
+      expect(v.status, VerdictStatus.quotesRejected);
+    });
+
+    test('the quote retry names the quotes that were not found', () async {
+      final bad = payload(criteria: [crit('Bidders need ten engineers')]);
+      final m = FakeModel([bad, payload()]);
+      await judge(m, tender());
+      expect(m.rejected, [
+        <String>[],
+        ['Bidders need ten engineers'],
+      ]);
+    });
+
+    test('an error after a bad quote still keeps the answer', () async {
+      final bad = payload(criteria: [crit('Bidders need ten engineers')]);
+      final m = FakeModel([bad, Exception('503')]);
+      final v = await judge(m, tender());
+      expect(m.calls, 3);
+      expect(v.status, VerdictStatus.quotesRejected);
+    });
+
+    test('a request limit is not retried and not called daily', () async {
+      final m = FakeModel([
+        QuotaExceeded('Quota exceeded for requests per minute'),
+      ]);
+      final v = await judge(m, tender());
+      expect(m.calls, 1);
+      expect(v.status, VerdictStatus.aiUnavailable);
+      expect(v.note, contains('request limit'));
+      expect(v.note, isNot(contains('daily')));
+    });
+
     test('malformed answers: one retry, then ai_unavailable', () async {
       final m = FakeModel([const FormatException('bad json')]);
       final v = await judge(m, tender());
@@ -415,6 +462,25 @@ void main() {
       expect(p, contains('Sri Lanka'));
       expect(p, contains('ISO 9001'));
       expect(p, contains('NOTICE (quote only from here):\n<<<\n$notice\n>>>'));
+    });
+
+    test('a quote retry lists the rejected quotes', () {
+      final p = GeminiModel.buildPrompt(
+        company: company,
+        profile: profile,
+        tender: tender(),
+        rejectedQuotes: ['Bidders need ten engineers'],
+      );
+      expect(p, contains('CORRECTION'));
+      expect(p, contains('- "Bidders need ten engineers"'));
+      expect(
+        GeminiModel.buildPrompt(
+          company: company,
+          profile: profile,
+          tender: tender(),
+        ),
+        isNot(contains('CORRECTION')),
+      );
     });
 
     test('very long notices are cut', () {

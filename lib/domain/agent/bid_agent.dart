@@ -19,15 +19,17 @@ class AgentOutcome {
 
 /// Turns a tender into an audited [Verdict]:
 /// rules veto → NO_BID without calling the AI; otherwise ask the model
-/// (20 s timeout, 2 retries on failure), verify every quote (one retry if a
-/// quote is not in the notice), then apply the guards.
+/// (20 s timeout per call), verify every quote, then apply the guards.
+/// A tender gets at most [maxCalls] model calls in total, shared by every
+/// kind of retry: a failed call, a malformed answer (one retry) and quotes
+/// not found in the notice (one retry that names them).
 class BidAgent {
   BidAgent({
     required this.model,
     this.verifier = const QuoteVerifier(),
     this.guards = const VerdictGuards(),
     this.timeout = const Duration(seconds: 20),
-    this.maxRetries = 2,
+    this.maxCalls = 3,
     DateTime Function()? clock,
     Future<void> Function(Duration)? sleep,
   }) : _clock = clock ?? DateTime.now,
@@ -36,8 +38,13 @@ class BidAgent {
   final AiModel model;
   final QuoteVerifier verifier;
   final VerdictGuards guards;
+
+  /// Per call. A timed-out request cannot be cancelled and still counts
+  /// against the quota, which is one reason the calls are capped.
   final Duration timeout;
-  final int maxRetries;
+
+  /// Most model calls for one tender, across all retries.
+  final int maxCalls;
   final DateTime Function() _clock;
   final Future<void> Function(Duration) _sleep;
 
@@ -66,83 +73,118 @@ class BidAgent {
       return AgentOutcome(rulesVerdict(company.id, tender, rules, now));
     }
 
-    var failures = 0;
-    var quoteRetried = false;
+    var calls = 0;
     var badAnswers = 0;
+    var quoteRetried = false;
+    var rejected = const <String>[];
+    AiFailure? lastKind;
+    Object? lastError;
+    // The latest answer whose quotes were not all found in the notice.
+    (AiVerdictPayload, QuoteCheck)? unverified;
 
-    while (true) {
+    while (calls < maxCalls) {
+      // Back off after a failed call; a malformed answer is retried at once.
+      if (lastKind != null && lastKind != AiFailure.notice) {
+        await _sleep(Duration(seconds: calls));
+      }
+      calls++;
       final AiVerdictPayload payload;
       try {
         payload = await model
-            .judgeTender(company: company, profile: profile, tender: tender)
+            .judgeTender(
+              company: company,
+              profile: profile,
+              tender: tender,
+              rejectedQuotes: rejected,
+            )
             .timeout(timeout);
       } on Object catch (e) {
         final kind = AiFailure.of(e);
-        if (kind == AiFailure.notice) {
-          // Malformed or blocked answer: ask once more, then give up on this
-          // notice only.
-          Log.warn('agent', 'unusable AI answer: $e');
-          if (++badAnswers > 1) {
-            return _unavailable(company, tender, rules, now, kind, e);
-          }
-          continue;
+        lastKind = kind;
+        lastError = e;
+        Log.warn('agent', 'AI call $calls failed (${kind.name}): $e');
+        // A quota, request limit or refused access will not clear in a few
+        // seconds, so retrying now only wastes a call.
+        if (kind == AiFailure.dailyQuota ||
+            kind == AiFailure.rateLimit ||
+            kind == AiFailure.auth) {
+          break;
         }
-        Log.warn('agent', 'AI call failed (${failures + 1}): $e');
-        if (++failures > maxRetries) {
-          return _unavailable(company, tender, rules, now, kind, e);
-        }
-        await _sleep(Duration(seconds: failures));
+        // A malformed or blocked answer gets one more try.
+        if (kind == AiFailure.notice && ++badAnswers > 1) break;
         continue;
       }
+      lastKind = null;
 
       final check = verifier.check(payload.criteria, tender.noticeText);
-      if (!check.allVerified && !quoteRetried) {
-        Log.warn(
-          'agent',
-          '${check.failed.length} quote(s) not in the notice; retrying once',
+      if (check.allVerified) {
+        final g = guards.apply(
+          aiVerdict: payload.verdict,
+          fitScore: payload.fitScore,
+          confidence: payload.confidence,
+          criteria: check.criteria,
+          rules: rules,
         );
-        quoteRetried = true;
-        continue;
+        final v = _answer(company, tender, rules, now, payload, check);
+        return AgentOutcome(_copy(v, verdict: g.verdict, note: g.reason));
       }
-
-      final base = Verdict(
-        id: 'ai_${company.id}_${tender.id}_${now.millisecondsSinceEpoch}',
-        tenderId: tender.id,
-        companyId: company.id,
-        verdict: VerdictKind.review,
-        fitScore: payload.fitScore,
-        confidence: payload.confidence,
-        criteria: check.criteria,
-        missingDocs: payload.missingDocs,
-        clarificationQuestion: payload.clarificationQuestion,
-        rulesResult: rules,
-        status: VerdictStatus.accepted,
-        model: model.modelName,
-        at: now,
+      unverified = (payload, check);
+      if (quoteRetried) break;
+      Log.warn(
+        'agent',
+        '${check.failed.length} quote(s) not in the notice; retrying once',
       );
-
-      if (!check.allVerified) {
-        // Twice unverifiable: a person must read the notice.
-        return AgentOutcome(
-          _copy(
-            base,
-            status: VerdictStatus.quotesRejected,
-            note:
-                '${check.failed.length} quote(s) could not be found in the '
-                'notice, so the AI answer is not trusted.',
-          ),
-        );
-      }
-      final g = guards.apply(
-        aiVerdict: payload.verdict,
-        fitScore: payload.fitScore,
-        confidence: payload.confidence,
-        criteria: check.criteria,
-        rules: rules,
-      );
-      return AgentOutcome(_copy(base, verdict: g.verdict, note: g.reason));
+      quoteRetried = true;
+      rejected = [for (final c in check.failed) c.quote];
     }
+
+    // An answer whose quotes are not in the notice is still an answer: a
+    // person must read the notice before trusting it.
+    if (unverified case (final payload, final check)) {
+      final v = _answer(company, tender, rules, now, payload, check);
+      return AgentOutcome(
+        _copy(
+          v,
+          status: VerdictStatus.quotesRejected,
+          note:
+              '${check.failed.length} quote(s) could not be found in the '
+              'notice, so the AI answer is not trusted.',
+        ),
+      );
+    }
+    return _unavailable(
+      company,
+      tender,
+      rules,
+      now,
+      lastKind ?? AiFailure.service,
+      lastError ?? 'no answer',
+    );
   }
+
+  /// An AI answer as an accepted REVIEW, before the guards decide.
+  Verdict _answer(
+    Company company,
+    Tender tender,
+    RulesResult rules,
+    DateTime now,
+    AiVerdictPayload payload,
+    QuoteCheck check,
+  ) => Verdict(
+    id: 'ai_${company.id}_${tender.id}_${now.millisecondsSinceEpoch}',
+    tenderId: tender.id,
+    companyId: company.id,
+    verdict: VerdictKind.review,
+    fitScore: payload.fitScore,
+    confidence: payload.confidence,
+    criteria: check.criteria,
+    missingDocs: payload.missingDocs,
+    clarificationQuestion: payload.clarificationQuestion,
+    rulesResult: rules,
+    status: VerdictStatus.accepted,
+    model: model.modelName,
+    at: now,
+  );
 
   /// The audit record for a tender the rules removed. Deterministic ID, so
   /// the same tender is never recorded twice.

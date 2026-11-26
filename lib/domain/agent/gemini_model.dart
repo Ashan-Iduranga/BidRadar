@@ -70,6 +70,7 @@ Rules:
     required Company company,
     required CompanyProfile profile,
     required Tender tender,
+    List<String> rejectedQuotes = const [],
   }) {
     final notice = tender.noticeText.length > maxNoticeChars
         ? tender.noticeText.substring(0, maxNoticeChars)
@@ -105,6 +106,14 @@ Rules:
       '<<<',
       notice,
       '>>>',
+      if (rejectedQuotes.isNotEmpty) ...[
+        '',
+        'CORRECTION: these quotes from your previous answer are not in the '
+            'NOTICE word for word:',
+        for (final q in rejectedQuotes) '- "$q"',
+        'Copy each quote exactly from the NOTICE, or leave that criterion '
+            'out.',
+      ],
     ].join('\n');
   }
 
@@ -113,10 +122,16 @@ Rules:
     required Company company,
     required CompanyProfile profile,
     required Tender tender,
+    List<String> rejectedQuotes = const [],
   }) async {
     final res = await _model.generateContent([
       Content.text(
-        buildPrompt(company: company, profile: profile, tender: tender),
+        buildPrompt(
+          company: company,
+          profile: profile,
+          tender: tender,
+          rejectedQuotes: rejectedQuotes,
+        ),
       ),
     ]);
     final text = res.text;
