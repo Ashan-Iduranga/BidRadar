@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -99,11 +100,40 @@ class NotificationService {
     }
   }
 
-  /// Replaces every scheduled reminder with [planned]. Times are scheduled
-  /// as absolute UTC instants, so the device time zone database is not
-  /// needed. Inexact scheduling avoids the exact-alarm permission; Android
-  /// may shift a reminder by some minutes.
-  Future<int> scheduleReminders(List<PlannedReminder> planned) async {
+  /// The newest plan not yet applied, and the run applying plans.
+  List<PlannedReminder>? _nextPlan;
+  Future<int>? _applying;
+
+  /// Replaces every scheduled reminder with [planned]. Calls run one at a
+  /// time and the latest plan wins: a plan that is replaced before its turn
+  /// is skipped, so 2 quick changes can never leave stale reminders behind.
+  /// Completes when the latest plan is in place, with its size.
+  Future<int> scheduleReminders(List<PlannedReminder> planned) {
+    _nextPlan = planned;
+    return _applying ??= _applyLatest();
+  }
+
+  Future<int> _applyLatest() async {
+    var count = 0;
+    try {
+      while (_nextPlan != null) {
+        final plan = _nextPlan!;
+        _nextPlan = null;
+        count = await replaceReminders(plan);
+      }
+    } finally {
+      _applying = null;
+    }
+    return count;
+  }
+
+  /// Cancels the scheduled reminders and schedules [planned] instead. Times
+  /// are scheduled as absolute UTC instants, so the device time zone
+  /// database is not needed. Inexact scheduling avoids the exact-alarm
+  /// permission; Android may shift a reminder by some minutes.
+  @protected
+  @visibleForTesting
+  Future<int> replaceReminders(List<PlannedReminder> planned) async {
     try {
       await init();
       if (!_tzReady) {
