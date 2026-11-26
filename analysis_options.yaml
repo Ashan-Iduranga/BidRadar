@@ -10,6 +10,8 @@ analyzer:
     - windows/**
     - macos/**
     - linux/**
+    # The rules tests install Node packages here; they are not app code.
+    - tool/rules_test/node_modules/**
   language:
     strict-casts: true
     strict-raw-types: true
