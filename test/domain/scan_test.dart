@@ -161,6 +161,7 @@ void main() {
       TextOcr? ocrImpl,
       NoticeReader? reader,
       bool cacheFails = false,
+      bool watch = true,
     }) {
       final db = AppDatabase(NativeDatabase.memory());
       addTearDown(db.close);
@@ -198,6 +199,8 @@ void main() {
         ],
       );
       addTearDown(c.dispose);
+      // The Scan page watches it; without a listener it is disposed.
+      if (watch) c.listen(scanViewModelProvider, (_, _) {});
       return c;
     }
 
@@ -258,6 +261,32 @@ void main() {
       expect(s.error, contains('Could not save'));
       expect(s.draft!.title, 'Hospital system');
       expect(s.ocrText, ocr);
+    });
+
+    test('leaving the page drops a scan that was still being read', () async {
+      final c = container(watch: false);
+      final page = c.listen(scanViewModelProvider, (_, _) {});
+      final reading = c
+          .read(scanViewModelProvider.notifier)
+          .process(photo.path);
+      page.close(); // the user goes back
+      await reading;
+      await pumpEventQueue();
+      expect(c.read(scanViewModelProvider), isA<ScanIdle>());
+    });
+
+    test('leaving during the save finishes it, then starts fresh', () async {
+      final c = container(watch: false);
+      final page = c.listen(scanViewModelProvider, (_, _) {});
+      final vm = c.read(scanViewModelProvider.notifier);
+      await vm.process(photo.path);
+      final saving = vm.save(typed());
+      page.close(); // the user goes back while it saves
+      await saving;
+      await pumpEventQueue();
+      final id = typed().toTender(DateTime(2026)).id;
+      expect(await c.read(tenderCacheProvider).byId(id), isNotNull);
+      expect(c.read(scanViewModelProvider), isA<ScanIdle>());
     });
 
     test('once saved, a failed AI call still opens the tender', () async {

@@ -92,12 +92,17 @@ class ScanViewModel extends Notifier<ScanState> {
       await file.writeAsBytes(bytes, flush: true);
     } on Object catch (e, st) {
       Log.error('scan', 'could not load the sample notice', e, st);
-      state = const ScanFailed('Could not load the sample notice.');
+      if (ref.mounted) {
+        state = const ScanFailed('Could not load the sample notice.');
+      }
       return;
     }
+    if (!ref.mounted) return;
     await process(file.path, mimeType: 'image/png');
   }
 
+  /// Reads the photo. If the user leaves the page meanwhile, the result is
+  /// dropped with the page (`ref.mounted` turns false).
   Future<void> process(
     String imagePath, {
     String mimeType = 'image/jpeg',
@@ -105,6 +110,7 @@ class ScanViewModel extends Notifier<ScanState> {
     try {
       state = const ScanWorking('Reading the text…');
       final ocr = await ref.read(textOcrProvider).read(imagePath);
+      if (!ref.mounted) return;
       if (ocr.trim().length < 40) {
         state = const ScanFailed(
           'No readable text found. Use good light, hold the phone flat and '
@@ -114,14 +120,17 @@ class ScanViewModel extends Notifier<ScanState> {
       }
       state = const ScanWorking('Understanding the notice…');
       final Uint8List image = await File(imagePath).readAsBytes();
+      if (!ref.mounted) return;
       try {
         final read = await ref
             .read(noticeReaderProvider)
             .read(image: image, mimeType: mimeType, ocrText: ocr);
+        if (!ref.mounted) return;
         state = ScanReview(read: read, ocrText: ocr, imagePath: imagePath);
       } on Object catch (e) {
         // The AI is optional here: the user can still type the fields.
         Log.warn('scan', 'AI could not read the notice: $e');
+        if (!ref.mounted) return;
         state = ScanReview(
           read: ScannedNotice.empty,
           ocrText: ocr,
@@ -131,7 +140,7 @@ class ScanViewModel extends Notifier<ScanState> {
       }
     } on Object catch (e) {
       Log.error('scan', 'scan failed', e);
-      state = ScanFailed('Could not read the photo: $e');
+      if (ref.mounted) state = ScanFailed('Could not read the photo: $e');
     }
   }
 
@@ -140,6 +149,9 @@ class ScanViewModel extends Notifier<ScanState> {
   /// problems, or a failed save, goes back to the form with everything the
   /// user typed. Once the tender is saved on the phone, a failed AI call
   /// still opens it; Tender detail can judge it again.
+  ///
+  /// The save finishes even if the user leaves the page; the state is then
+  /// dropped as soon as it is done, so the next visit starts fresh.
   Future<void> save(ScanDraft draft) async {
     final review = state;
     if (review is! ScanReview) return;
@@ -148,6 +160,15 @@ class ScanViewModel extends Notifier<ScanState> {
       state = review.withDraft(draft, problems.first);
       return;
     }
+    final link = ref.keepAlive();
+    try {
+      await _save(review, draft);
+    } finally {
+      link.close();
+    }
+  }
+
+  Future<void> _save(ScanReview review, ScanDraft draft) async {
     final tender = draft.toTender(DateTime.now());
     state = const ScanWorking('Saving…');
     try {
@@ -210,6 +231,7 @@ class ScanViewModel extends Notifier<ScanState> {
   }
 }
 
-final scanViewModelProvider = NotifierProvider<ScanViewModel, ScanState>(
-  ScanViewModel.new,
-);
+/// Lives only while the Scan page shows it, so leaving the page drops a
+/// half-finished scan instead of showing it on the next visit.
+final scanViewModelProvider =
+    NotifierProvider.autoDispose<ScanViewModel, ScanState>(ScanViewModel.new);
