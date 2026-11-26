@@ -54,9 +54,10 @@ Rules:
   leave the criterion out.
 - "met" says whether the company meets it from its profile: yes, no, or
   unknown when the profile does not say.
-- verdict: BID only if no criterion is "no" and the work fits the company;
-  NO_BID if a criterion is clearly "no" or the work is outside its sectors;
-  otherwise REVIEW.
+- verdict: BID only if every criterion is "yes" and the work fits the
+  company; NO_BID only if at least one criterion is "no"; otherwise REVIEW.
+  If the work is outside the company's sectors, add a criterion for it that
+  quotes the notice's description of the work, with "met": "no".
 - fitScore 0-100: how well the work matches the company's sectors and past
   contracts. confidence 0.0-1.0: how sure you are of the verdict.
 - missingDocs: documents the company would need to prepare.

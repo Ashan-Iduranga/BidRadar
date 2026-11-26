@@ -187,15 +187,64 @@ void main() {
       expect(bid(warnings: ['Deadline unknown.']).verdict, VerdictKind.review);
     });
 
-    test('a confident NO_BID stays NO_BID', () {
+    test('a confident NO_BID with an unmet requirement stays NO_BID', () {
       final r = g.apply(
         aiVerdict: VerdictKind.noBid,
         fitScore: 10,
         confidence: 0.9,
-        criteria: good,
+        criteria: [
+          crit('x'),
+          crit('y', met: CriterionMet.no),
+        ],
         rules: const RulesResult.pass(),
       );
       expect(r.verdict, VerdictKind.noBid);
+    });
+
+    test('a NO_BID without an unmet requirement goes to REVIEW', () {
+      ({VerdictKind verdict, String? reason}) noBid(List<Criterion> c) =>
+          g.apply(
+            aiVerdict: VerdictKind.noBid,
+            fitScore: 10,
+            confidence: 0.9,
+            criteria: c,
+            rules: const RulesResult.pass(),
+          );
+      expect(noBid([]).verdict, VerdictKind.review);
+      expect(noBid([]).reason, contains('without quoting any evidence'));
+      expect(noBid(good).verdict, VerdictKind.review);
+      expect(
+        noBid([crit('x', met: CriterionMet.unknown)]).verdict,
+        VerdictKind.review,
+      );
+    });
+
+    test('a BID resting on an unknown requirement goes to REVIEW', () {
+      final r = g.apply(
+        aiVerdict: VerdictKind.bid,
+        fitScore: 90,
+        confidence: 0.95,
+        criteria: [
+          crit('x'),
+          const Criterion(
+            criterion: 'ISO 27001',
+            quote: 'q',
+            met: CriterionMet.unknown,
+          ),
+        ],
+        rules: const RulesResult.pass(),
+      );
+      expect(r.verdict, VerdictKind.review);
+      expect(r.reason, contains('"ISO 27001"'));
+    });
+
+    test('an AI NO_BID with no evidence does not hide the tender', () async {
+      final m = FakeModel([
+        payload(verdict: VerdictKind.noBid, fit: 10, criteria: []),
+      ]);
+      final v = await judge(m, tender());
+      expect(v.verdict, VerdictKind.review);
+      expect(v.status, VerdictStatus.accepted);
     });
   });
 
