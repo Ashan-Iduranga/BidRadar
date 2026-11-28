@@ -35,6 +35,7 @@ abstract final class BidWorkflow {
         ? verdict?.fitScore
         : null,
     updatedAt: now,
+    createdAt: now,
   );
 
   /// Stages a bid can move to next, for [role]. Moving to Preparing needs

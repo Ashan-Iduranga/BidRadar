@@ -27,10 +27,90 @@ service cloud.firestore {
       return request.auth.token.email.lower();
     }
 
-    // The caller holds an invite to this company.
+    // Email/password accounts are not verified by default, and an invite
+    // is addressed to an email. Without this, whoever registered the
+    // invited address first could join the company.
+    function emailVerified() {
+      return request.auth.token.get('email_verified', false) == true;
+    }
+
+    // Top-level fields an update adds, removes or changes.
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function unchanged(keys) {
+      return !changedKeys().hasAny(keys);
+    }
+
+    // A new bid starts in Watching, not approved, with no checklist, no
+    // outcome and no owner's note. Anyone asking at once must be the caller.
+    function newBidIsUnapproved() {
+      let b = request.resource.data;
+      return b.stage == 'watching'
+        && ((b.approval == 'none' && b.get('requestedBy', null) == null)
+          || (b.approval == 'pending'
+            && b.get('requestedBy', null) == request.auth.uid))
+        && b.get('approvalNote', '') == ''
+        && b.get('tasks', []).size() == 0
+        && b.get('taskDone', {}).size() == 0
+        && b.get('lossReasons', []).size() == 0
+        && b.ownerUid == request.auth.uid;
+    }
+
+    // What a bid manager may change on an existing bid:
+    // - ask for approval: none or rejected to pending, in Watching, as
+    //   themself;
+    // - move on once the owner approved: Preparing to Submitted, then Won
+    //   or Lost, with loss reasons only when Lost;
+    // - work the checklist: tick tasks (taskDone) and add tasks, never
+    //   remove them.
+    // Everything else (approval decisions, the owner's note, the verdict
+    // and the tender facts) is the owner's.
+    function bidManagerMayUpdate() {
+      let old = resource.data;
+      let b = request.resource.data;
+      let keys = changedKeys();
+      return keys.hasOnly(['approval', 'requestedBy', 'stage', 'lossReasons',
+          'tasks', 'taskDone', 'updatedAt'])
+        && (!('approval' in keys)
+          || (old.stage == 'watching'
+            && old.approval in ['none', 'rejected']
+            && b.approval == 'pending'))
+        && (!('requestedBy' in keys)
+          || (b.approval == 'pending' && b.requestedBy == request.auth.uid))
+        && (!('stage' in keys)
+          || (old.approval == 'approved'
+            && ((old.stage == 'preparing' && b.stage == 'submitted')
+              || (old.stage == 'submitted' && b.stage in ['won', 'lost']))))
+        && (!('lossReasons' in keys) || b.stage == 'lost')
+        && (!('tasks' in keys) || b.tasks.size() > old.tasks.size());
+    }
+
+    // A tender as Tender.toJson() writes it, stored under its own ID
+    // (`{source}_{sourceId}`). A scan's sourceId is its text hash prefix.
+    function isTender(tenderId) {
+      let t = request.resource.data;
+      return t.keys().hasAll(['source', 'sourceId', 'title', 'buyer',
+          'country', 'cpvCodes', 'noticeText', 'textHash', 'fetchedAt'])
+        && t.keys().hasOnly(['source', 'sourceId', 'title', 'buyer',
+          'country', 'cpvCodes', 'deadline', 'estimatedValue', 'currency',
+          'minTurnover', 'noticeText', 'textHash', 'url', 'documentUrls',
+          'fetchedAt'])
+        && t.source in ['ted', 'worldbank', 'scan']
+        && t.sourceId is string
+        && tenderId == t.source + '_' + t.sourceId
+        && t.title is string && t.buyer is string && t.country is string
+        && t.cpvCodes is list && t.noticeText is string
+        && t.textHash is string && t.fetchedAt is string
+        && t.get('documentUrls', []) is list
+        && (t.source != 'scan' || t.textHash[0:16] == t.sourceId);
+    }
+
+    // The caller holds an invite to this company, at a verified email.
     function invitedTo(companyId) {
       let path = /databases/$(database)/documents/invites/$(myEmail());
-      return signedIn() && exists(path)
+      return signedIn() && emailVerified() && exists(path)
         && get(path).data.companyId == companyId;
     }
 
@@ -40,7 +120,9 @@ service cloud.firestore {
       allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
-    // invites/{email}: owner invites a bid manager by email.
+    // invites/{email}: owner invites a bid manager by email. The invitee
+    // may see it before verifying (onboarding then asks them to verify),
+    // but only a verified invitee may accept or decline it.
     match /invites/{email} {
       allow read: if signedIn()
         && (myEmail() == email || isOwner(resource.data.companyId));
@@ -49,8 +131,15 @@ service cloud.firestore {
         && request.resource.data.role == 'bid_manager'
         && request.resource.data.invitedBy == request.auth.uid;
       allow delete: if signedIn()
-        && (myEmail() == email || isOwner(resource.data.companyId));
-      allow update: if false;
+        && ((myEmail() == email && emailVerified())
+          || isOwner(resource.data.companyId));
+      // The owner of the inviting company may send it again. An invite
+      // from another company cannot be taken over.
+      allow update: if isOwner(resource.data.companyId)
+        && request.resource.data.companyId == resource.data.companyId
+        && request.resource.data.email == email
+        && request.resource.data.role == 'bid_manager'
+        && request.resource.data.invitedBy == request.auth.uid;
     }
 
     match /companies/{companyId} {
@@ -78,10 +167,18 @@ service cloud.firestore {
       allow write: if isOwner(companyId);
     }
 
-    // Public tender data, shared across companies. Written by the app's sync.
+    // Public tender data, shared across companies. Written by the sync and
+    // Scan on every phone, as Tender.toJson(). Any signed-in user may still
+    // refresh a TED or World Bank tender; only a server-side sync could
+    // stop that, and the free plan has none.
     match /tenders/{tenderId} {
       allow read: if signedIn();
-      allow create, update: if signedIn();
+      allow create: if signedIn() && isTender(tenderId);
+      // A scanned notice's ID comes from its text, so its text never
+      // changes.
+      allow update: if signedIn() && isTender(tenderId)
+        && (request.resource.data.source != 'scan'
+          || unchanged(['noticeText', 'textHash']));
       allow delete: if false;
     }
 
@@ -93,18 +190,21 @@ service cloud.firestore {
     }
 
     match /bids/{bidId} {
-      allow read: if isMember(resource.data.companyId);
-      allow create: if isMember(request.resource.data.companyId);
-      // Members update bids, but only the owner approves: a bid manager may
-      // only ask (approval -> 'pending') and cannot leave 'watching' until
-      // the owner has approved.
+      // Reading a bid that does not exist reveals nothing, and lets a
+      // removed bid show as removed instead of failing.
+      allow read: if resource == null || isMember(resource.data.companyId);
+      // Any member may start watching a tender. The ID is tied to the
+      // company, so one company cannot take another company's bid ID.
+      allow create: if isMember(request.resource.data.companyId)
+        && bidId == request.resource.data.companyId + '_'
+          + request.resource.data.tenderId
+        && newBidIsUnapproved();
+      // Only the owner approves: see bidManagerMayUpdate. createdAt never
+      // changes, so a fresh bid written over an existing one (a stale
+      // "Watch this tender") is refused instead of wiping its progress.
       allow update: if isMember(resource.data.companyId)
-        && request.resource.data.companyId == resource.data.companyId
-        && (isOwner(resource.data.companyId)
-          || ((request.resource.data.approval == resource.data.approval
-                || request.resource.data.approval == 'pending')
-            && (resource.data.stage != 'watching'
-                || request.resource.data.stage == 'watching')));
+        && unchanged(['id', 'companyId', 'tenderId', 'createdAt'])
+        && (isOwner(resource.data.companyId) || bidManagerMayUpdate());
       allow delete: if isOwner(resource.data.companyId);
     }
 

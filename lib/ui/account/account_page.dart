@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -15,6 +14,7 @@ import '../feed/feed_view_model.dart';
 import '../insights/insights_view_model.dart';
 import '../pipeline/pipeline_view_model.dart';
 import '../session/session_providers.dart';
+import '../settings/notification_access.dart';
 import '../settings/settings_providers.dart';
 import '../widgets/app_header.dart';
 
@@ -72,28 +72,7 @@ class AccountPage extends ConsumerWidget {
               ),
               2,
             ),
-            section(
-              'Notifications',
-              _Group(
-                children: [
-                  _SwitchRow(
-                    title: 'Deadline reminders',
-                    subtitle:
-                        '7, 3 and 1 days before, at 9:00, plus a Monday '
-                        'digest',
-                    value: settings.deadlineReminders,
-                    onChanged: vm.setDeadlineReminders,
-                  ),
-                  _SwitchRow(
-                    title: 'New matching tenders',
-                    subtitle: 'After each background sync',
-                    value: settings.newTenderAlerts,
-                    onChanged: vm.setNewTenderAlerts,
-                  ),
-                ],
-              ),
-              3,
-            ),
+            section('Notifications', const _NotificationSwitches(), 3),
             section('Data and help', const _DataAndHelp(), 4),
             const SizedBox(height: Space.xl),
             const _SignOutButton().entrance(context, index: 5),
@@ -462,6 +441,80 @@ class _Group extends StatelessWidget {
   }
 }
 
+/// The 2 notification switches. They show off while Android blocks
+/// BidRadar's notifications, whatever the saved choice, and explain how to
+/// turn them back on.
+class _NotificationSwitches extends ConsumerWidget {
+  const _NotificationSwitches();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final settings = ref.watch(settingsProvider);
+    final vm = ref.read(settingsProvider.notifier);
+    final access = ref.read(notificationAccessProvider.notifier);
+    final blocked =
+        ref.watch(notificationAccessProvider).value ==
+        NotificationAccess.blocked;
+
+    Future<void> set(bool on, Future<void> Function(bool) save) async {
+      if (on && blocked) {
+        final messenger = ScaffoldMessenger.of(context);
+        if (!await access.request()) {
+          messenger.showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Allow notifications for BidRadar in Android settings.',
+              ),
+              action: SnackBarAction(
+                label: 'Open settings',
+                onPressed: access.openSettings,
+              ),
+            ),
+          );
+          return;
+        }
+      }
+      await save(on);
+    }
+
+    return _Group(
+      children: [
+        _SwitchRow(
+          title: 'Deadline reminders',
+          subtitle: '7, 3 and 1 days before, at 9:00, plus a Monday digest',
+          value: settings.deadlineReminders && !blocked,
+          onChanged: (on) => set(on, vm.setDeadlineReminders),
+        ),
+        _SwitchRow(
+          title: 'New matching tenders',
+          subtitle: 'After each background sync',
+          value: settings.newTenderAlerts && !blocked,
+          onChanged: (on) => set(on, vm.setNewTenderAlerts),
+        ),
+        if (blocked)
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 4,
+            ),
+            leading: const Icon(Icons.notifications_off_outlined),
+            title: const Text(
+              'Notifications are off for BidRadar in Android settings, so '
+              'reminders and alerts cannot appear.',
+            ),
+            subtitle: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: access.openSettings,
+                child: const Text('Open settings'),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
 class _SwitchRow extends StatelessWidget {
   const _SwitchRow({
     required this.title,
@@ -608,8 +661,9 @@ class _SignOutButton extends ConsumerWidget {
                 builder: (context) => AlertDialog(
                   title: const Text('Sign out?'),
                   content: const Text(
-                    'Your tenders stay saved on this phone. Sign in again to '
-                    'keep working.',
+                    'Tenders and AI verdicts saved on this phone are '
+                    'cleared. Your company and bids stay in your account; '
+                    'sign in and sync to get the feed back.',
                   ),
                   actions: [
                     TextButton(
@@ -623,7 +677,7 @@ class _SignOutButton extends ConsumerWidget {
                   ],
                 ),
               );
-              if (ok ?? false) await FirebaseAuth.instance.signOut();
+              if (ok ?? false) await ref.read(authServiceProvider).signOut();
             },
     );
   }

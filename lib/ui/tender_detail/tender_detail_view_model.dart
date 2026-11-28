@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../data/models/models.dart';
 import '../../data/providers.dart';
+import '../../domain/agent/profile_fingerprint.dart';
 import '../feed/feed_view_model.dart';
 import '../session/session_providers.dart';
 
@@ -59,7 +60,15 @@ class JudgeViewModel extends Notifier<bool> {
             tender: tender,
             rules: rules,
           );
-      await ref.read(verdictCacheProvider).put(v, textHash: tender.textHash);
+      // With the profile fingerprint, so the next sync reuses this verdict
+      // instead of judging the tender again.
+      await ref
+          .read(verdictCacheProvider)
+          .put(
+            v,
+            textHash: tender.textHash,
+            profileHash: ProfileFingerprint.of(company, profile),
+          );
       try {
         await ref
             .read(syncStoreProvider)

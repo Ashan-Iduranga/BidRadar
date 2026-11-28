@@ -40,15 +40,19 @@ final membershipProvider = Provider<Membership>((ref) {
   final user = auth.value;
   if (user == null) return Membership.none;
 
+  // isLoading, not hasValue: after sign-in these providers reload but keep
+  // the signed-out value (null) until the new one arrives, which would
+  // read as "no company" and flash onboarding.
   final id = ref.watch(currentCompanyIdProvider);
-  if (!id.hasValue && !id.hasError) return Membership.loading;
+  if (id.hasError) return Membership.none;
+  if (id.isLoading) return Membership.loading;
   if (id.value == null) return Membership.none;
 
   final company = ref.watch(currentCompanyProvider);
   // A permission error means the user doc points at a company they are not
   // a member of; treat it as no company.
   if (company.hasError) return Membership.none;
-  if (!company.hasValue) return Membership.loading;
+  if (company.isLoading) return Membership.loading;
   final c = company.value;
   return c != null && c.members.containsKey(user.uid)
       ? Membership.member

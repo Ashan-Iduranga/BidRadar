@@ -6,10 +6,12 @@ import '../../data/local/app_database.dart';
 import '../../data/models/models.dart';
 import '../../data/repositories/sync_store.dart';
 import '../../data/sources/tender_source.dart';
+import '../agent/ai_failure.dart';
 import '../agent/bid_agent.dart';
+import '../agent/profile_fingerprint.dart';
 import '../rules/eligibility_rules.dart';
 
-/// The feed pipeline: fetch → dedup → hard rules → store.
+/// The feed pipeline: fetch → drop closed → dedup → hard rules → store → AI.
 /// Shared by "Sync now" in the UI and the workmanager background task.
 /// Tenders vetoed by the rules are recorded as NO_BID and never reach the
 /// AI (Phase 3 sends only the matched ones).
@@ -38,9 +40,18 @@ class FeedSync {
   final BidAgent? agent;
   final VerdictCache? verdicts;
 
-  /// Gemini calls per sync, to stay inside the free-tier quota. Tenders not
-  /// judged this time are judged on later syncs, soonest deadline first.
+  /// Tenders sent to Gemini per sync, to stay inside the free-tier quota.
+  /// Tenders not judged this time are judged on later syncs, soonest
+  /// deadline first. Each tender uses at most 3 calls, so a sync makes at
+  /// most 15. There is no pause between tenders: the O2 evaluation made
+  /// about 40 calls back to back without hitting a request limit, and if
+  /// one is hit the sync stops and the rest wait for the next sync.
   final int maxAiPerSync;
+
+  /// After this many notice-specific AI failures in a row (malformed or
+  /// blocked answers), a notice is left for a person. "Judge with AI" on the
+  /// detail page can still try it.
+  static const maxNoticeFailures = 3;
   final EligibilityRules rules;
   final int limitPerSource;
   final Duration storeTimeout;
@@ -68,10 +79,18 @@ class FeedSync {
       }),
     );
 
-    // 2. Dedup into the local cache.
-    final written = await cache.upsertAll(found);
+    // 2. Drop notices that have already closed, to the minute. Sources
+    // filter by date, so a tender that closed earlier today would otherwise
+    // come back after every prune and be counted (and vetoed) as new.
+    final open = [
+      for (final t in found)
+        if (t.deadline == null || t.deadline!.toUtc().isAfter(now)) t,
+    ];
 
-    // 3. Hard rules on new tenders only.
+    // 3. Dedup into the local cache.
+    final written = await cache.upsertAll(open);
+
+    // 4. Hard rules on new tenders only.
     final matched = <Tender>[];
     final vetoes = <Verdict>[];
     for (final t in written.added) {
@@ -88,7 +107,7 @@ class FeedSync {
       }
     }
 
-    // 4. Firestore, best effort: the local cache is already updated.
+    // 5. Firestore, best effort: the local cache is already updated.
     // Offline, a commit only completes once the server confirms it; the
     // writes stay queued in Firestore's local cache, so a timeout loses
     // nothing.
@@ -104,10 +123,10 @@ class FeedSync {
       errors.add('Cloud save: ${reasonOf(e)}');
     }
 
-    // 5. Closed tenders cannot be bid on; keep the offline cache small.
+    // 6. Closed tenders cannot be bid on; keep the offline cache small.
     await cache.pruneClosedBefore(now);
 
-    // 6. AI verdicts for eligible tenders that have none yet.
+    // 7. AI verdicts for eligible tenders that have none yet.
     final judged = await _judgePending(company, profile, now, errors);
 
     final report = SyncReport(
@@ -136,10 +155,17 @@ class FeedSync {
     final vc = verdicts;
     if (a == null || vc == null || maxAiPerSync <= 0) return const [];
 
-    final todo = <(Tender, RulesResult)>[];
+    final fingerprint = ProfileFingerprint.of(company, profile);
+
+    // Tenders never asked about (or whose notice changed) go first, then
+    // verdicts made with an older profile, then earlier AI failures, so one
+    // notice that keeps failing is not first in line on every sync.
+    // cache.all() is soonest deadline first.
+    final fresh = <_Pending>[];
+    final outdated = <_Pending>[];
+    final retry = <_Pending>[];
+    var order = 0;
     for (final t in await cache.all()) {
-      // cache.all() is sorted by deadline, soonest first.
-      if (todo.length >= maxAiPerSync) break;
       final r = rules.check(
         company: company,
         profile: profile,
@@ -147,28 +173,58 @@ class FeedSync {
         now: now,
       );
       if (!r.passed) continue;
-      if (await vc.reusable(company.id, t) != null) continue;
-      todo.add((t, r));
+      final cached = await vc.entry(company.id, t.id);
+      if (cached == null || cached.textHash != t.textHash) {
+        fresh.add(_Pending(t, r, 0, order++));
+      } else if (cached.failed) {
+        if (cached.failures >= maxNoticeFailures) continue; // for a person
+        retry.add(_Pending(t, r, cached.failures, order++));
+      } else if (cached.profileHash != fingerprint) {
+        outdated.add(_Pending(t, r, 0, order++));
+      }
+      // Otherwise the cached verdict is reused.
     }
+    retry.sort(
+      (x, y) => x.failures != y.failures
+          ? x.failures.compareTo(y.failures)
+          : x.order.compareTo(y.order),
+    );
+    final todo = [...fresh, ...outdated, ...retry].take(maxAiPerSync);
 
     final out = <Verdict>[];
-    for (final (t, r) in todo) {
-      final v = await a.judge(
+    var noticeFailures = 0;
+    for (final p in todo) {
+      final o = await a.assess(
         company: company,
         profile: profile,
-        tender: t,
-        rules: r,
+        tender: p.tender,
+        rules: p.rules,
       );
-      await vc.put(v, textHash: t.textHash);
-      out.add(v);
-      // Quota or connection problems will not clear up within one sync.
-      if (v.status == VerdictStatus.aiUnavailable) break;
+      final failures = switch (o.failure) {
+        null => 0,
+        AiFailure.notice => p.failures + 1,
+        // Not this notice's fault: keep its count.
+        _ => p.failures,
+      };
+      await vc.put(
+        o.verdict,
+        textHash: p.tender.textHash,
+        failures: failures,
+        profileHash: fingerprint,
+      );
+      out.add(o.verdict);
+      if (o.failure == AiFailure.notice) noticeFailures++;
+      // Quota, connection, access or service problems will not clear up
+      // within one sync. A problem with one notice does not stop the rest.
+      if (o.failure?.stopsSync ?? false) {
+        errors.add('AI: ${o.verdict.note}');
+        break;
+      }
     }
-    final failed = out
-        .where((v) => v.status == VerdictStatus.aiUnavailable)
-        .toList();
-    if (failed.isNotEmpty) {
-      errors.add('AI: ${failed.first.note}');
+    if (noticeFailures > 0) {
+      errors.add(
+        'AI: $noticeFailures notice(s) could not be judged. Decide manually.',
+      );
     }
     try {
       await store.recordVerdicts(out).timeout(storeTimeout);
@@ -192,4 +248,17 @@ class FeedSync {
     _ when '$e'.contains('unavailable') => 'offline',
     _ => 'failed',
   };
+}
+
+/// A tender waiting for an AI verdict in this sync.
+class _Pending {
+  const _Pending(this.tender, this.rules, this.failures, this.order);
+  final Tender tender;
+  final RulesResult rules;
+
+  /// Notice-specific AI failures in a row so far.
+  final int failures;
+
+  /// Position in the deadline order, to keep sorting stable.
+  final int order;
 }

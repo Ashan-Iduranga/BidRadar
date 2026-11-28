@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/data/latest_all.dart' as tzdata;
 import 'package:timezone/timezone.dart' as tz;
@@ -15,6 +16,10 @@ class NotificationService {
   bool _ready = false;
 
   static const newTendersId = 1001;
+
+  /// Drawable for the status bar icon. Kept in release builds by
+  /// res/raw/keep.xml, because the plugin looks it up by name.
+  static const statusBarIcon = 'ic_stat_bidradar';
   static bool _tzReady = false;
   static const _deadlineChannel = AndroidNotificationDetails(
     'deadlines',
@@ -35,21 +40,54 @@ class NotificationService {
     if (_ready) return;
     await _plugin.initialize(
       settings: const InitializationSettings(
-        android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        // A white-on-transparent radar (res/drawable/ic_stat_bidradar.xml);
+        // the full-colour launcher icon shows as a blank blob.
+        android: AndroidInitializationSettings(statusBarIcon),
       ),
     );
     _ready = true;
   }
 
-  /// Asks for the Android 13+ notification permission. Safe to call more
-  /// than once; Android only shows the dialog until the user answers.
-  Future<bool> requestPermission() async {
-    await init();
-    final android = _plugin
-        .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin
-        >();
-    return await android?.requestNotificationsPermission() ?? false;
+  AndroidFlutterLocalNotificationsPlugin? get _android => _plugin
+      .resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin
+      >();
+
+  /// Asks for the Android 13+ notification permission. Older Android
+  /// versions answer without a dialog. Safe to call more than once; Android
+  /// only shows the dialog while it still may. Null when Android cannot be
+  /// asked (another platform, or no plugin in tests).
+  Future<bool?> requestPermission() async {
+    try {
+      await init();
+      return await _android?.requestNotificationsPermission();
+    } on Object catch (e) {
+      Log.warn('notify', 'could not ask for permission: $e');
+      return null;
+    }
+  }
+
+  /// Whether Android lets BidRadar post notifications right now. Null when
+  /// it cannot tell.
+  Future<bool?> areEnabled() async {
+    try {
+      await init();
+      return await _android?.areNotificationsEnabled();
+    } on Object catch (e) {
+      Log.warn('notify', 'could not read the permission: $e');
+      return null;
+    }
+  }
+
+  /// Opens BidRadar's notification settings in Android. False when no
+  /// settings screen could be opened.
+  Future<bool> openSettings() async {
+    try {
+      return await _android?.openAppNotificationSettings() ?? false;
+    } on Object catch (e) {
+      Log.warn('notify', 'could not open settings: $e');
+      return false;
+    }
   }
 
   /// "3 new tenders match". Tapping it opens the app on the Feed.
@@ -68,11 +106,40 @@ class NotificationService {
     }
   }
 
-  /// Replaces every scheduled reminder with [planned]. Times are scheduled
-  /// as absolute UTC instants, so the device time zone database is not
-  /// needed. Inexact scheduling avoids the exact-alarm permission; Android
-  /// may shift a reminder by some minutes.
-  Future<int> scheduleReminders(List<PlannedReminder> planned) async {
+  /// The newest plan not yet applied, and the run applying plans.
+  List<PlannedReminder>? _nextPlan;
+  Future<int>? _applying;
+
+  /// Replaces every scheduled reminder with [planned]. Calls run one at a
+  /// time and the latest plan wins: a plan that is replaced before its turn
+  /// is skipped, so 2 quick changes can never leave stale reminders behind.
+  /// Completes when the latest plan is in place, with its size.
+  Future<int> scheduleReminders(List<PlannedReminder> planned) {
+    _nextPlan = planned;
+    return _applying ??= _applyLatest();
+  }
+
+  Future<int> _applyLatest() async {
+    var count = 0;
+    try {
+      while (_nextPlan != null) {
+        final plan = _nextPlan!;
+        _nextPlan = null;
+        count = await replaceReminders(plan);
+      }
+    } finally {
+      _applying = null;
+    }
+    return count;
+  }
+
+  /// Cancels the scheduled reminders and schedules [planned] instead. Times
+  /// are scheduled as absolute UTC instants, so the device time zone
+  /// database is not needed. Inexact scheduling avoids the exact-alarm
+  /// permission; Android may shift a reminder by some minutes.
+  @protected
+  @visibleForTesting
+  Future<int> replaceReminders(List<PlannedReminder> planned) async {
     try {
       await init();
       if (!_tzReady) {

@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../../core/geo/countries.dart';
+import '../../core/geo/local_time.dart';
 import '../../core/logging/log.dart';
 import '../../core/net/resilient_http.dart';
 import '../../core/text/text_utils.dart';
@@ -136,12 +137,21 @@ class TedClient implements TenderSource {
         procTitle ??
         'TED notice $id';
 
-    final noticeText = <String>{
+    final text = <String>{
       title,
       if (procTitle != null && procTitle != title) procTitle,
       ..._allTexts(n['description-proc']),
       ..._allTexts(n['description-lot']),
     }.join('\n\n');
+
+    final country = _country(n, preferCountries);
+    final structured = _structuredDeadline(n);
+    // A date found in the text is local time in the buyer's country.
+    final wall = structured == null ? DeadlineParser.fromText(text) : null;
+    final local = wall == null ? null : LocalTime.toUtc(wall, country);
+    final noticeText = wall != null && local != null && !local.exact
+        ? '$text\n\n${LocalTime.uncertainNote(wall)}'
+        : text;
 
     final values = _strings(n['estimated-value-lot'])
         .map(double.tryParse)
@@ -154,9 +164,9 @@ class TedClient implements TenderSource {
       sourceId: id,
       title: title,
       buyer: _firstText(n['buyer-name']) ?? 'Unknown buyer',
-      country: _country(n, preferCountries),
+      country: country,
       cpvCodes: _strings(n['classification-cpv']).toSet().toList(),
-      deadline: resolveDeadline(n, noticeText),
+      deadline: structured ?? local?.utc,
       estimatedValue: values.isEmpty ? null : values.reduce((a, b) => a + b),
       currency: _strings(n['estimated-value-cur-lot']).firstOrNull,
       noticeText: noticeText,
@@ -168,8 +178,22 @@ class TedClient implements TenderSource {
   }
 
   /// Earliest lot deadline (date + time); else the request-to-participate
-  /// date; else a date found in the notice text; else null (unknown).
-  static DateTime? resolveDeadline(Map<String, dynamic> n, String text) {
+  /// date; else a date found in the notice text, read as local time in
+  /// [country]; else null (unknown).
+  static DateTime? resolveDeadline(
+    Map<String, dynamic> n,
+    String text, {
+    String country = '',
+  }) {
+    final structured = _structuredDeadline(n);
+    if (structured != null) return structured;
+    final wall = DeadlineParser.fromText(text);
+    return wall == null ? null : LocalTime.toUtc(wall, country).utc;
+  }
+
+  /// The earliest lot deadline, else the request-to-participate date. TED
+  /// gives these with their UTC offset.
+  static DateTime? _structuredDeadline(Map<String, dynamic> n) {
     final dates = _strings(n['deadline-receipt-tender-date-lot']);
     final times = _strings(n['deadline-receipt-tender-time-lot']);
     final lots = <DateTime>[];
@@ -183,11 +207,9 @@ class TedClient implements TenderSource {
         if (parsed != null) lots.add(parsed);
       }
     }
-    if (lots.isNotEmpty) {
-      lots.sort();
-      return lots.first;
-    }
-    return DeadlineParser.fromText(text);
+    if (lots.isEmpty) return null;
+    lots.sort();
+    return lots.first;
   }
 
   /// "2026-11-06+01:00" + "23:59:00+01:00" -> 2026-11-06T22:59:00Z.

@@ -2,22 +2,37 @@ import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:bidradar/core/text/text_utils.dart';
+import 'package:bidradar/data/local/app_database.dart';
 import 'package:bidradar/data/models/models.dart';
+import 'package:bidradar/data/providers.dart';
+import 'package:bidradar/domain/agent/ai_model.dart';
+import 'package:bidradar/domain/agent/bid_agent.dart';
+import 'package:bidradar/domain/agent/profile_fingerprint.dart';
 import 'package:bidradar/domain/rules/eligibility_rules.dart';
 import 'package:bidradar/domain/scan/scan.dart';
 import 'package:bidradar/ui/scan/scan_view_model.dart';
+import 'package:bidradar/ui/session/session_providers.dart';
+import 'package:drift/native.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 const ocr =
     'INVITATION FOR BIDS. Ministry of Health. Bidders must hold ISO 9001 '
-    'certification. Bids must be submitted no later than 28 November 2026.';
+    'certification. Bids must be submitted no later than 30 June 2027.';
 
 class FakeOcr implements TextOcr {
   FakeOcr(this.text);
   final String text;
   @override
   Future<String> read(String imagePath) async => text;
+}
+
+/// A phone whose local database refuses the write.
+class FailingCache extends TenderCache {
+  FailingCache(super.db);
+  @override
+  Future<CacheWriteResult> upsertAll(Iterable<Tender> tenders) =>
+      Future.error(StateError('disk full'));
 }
 
 class FakeReader implements NoticeReader {
@@ -33,7 +48,7 @@ class FakeReader implements NoticeReader {
     return ScannedNotice.fromJson(const {
       'title': 'Hospital appointment system',
       'buyer': 'Ministry of Health',
-      'deadline': '2026-11-28T14:00:00',
+      'deadline': '2027-06-30T14:00:00',
       'country': 'lka',
       'requirements': ['Bidders must hold ISO 9001 certification'],
       'minTurnover': 150000000,
@@ -48,7 +63,7 @@ void main() {
       final n = ScannedNotice.fromJson(const {
         'title': ' X ',
         'buyer': 'B',
-        'deadline': '2026-11-28T14:00:00',
+        'deadline': '2027-06-30T14:00:00',
         'country': 'lka',
         'requirements': ['a', ' ', 3],
         'minTurnover': 1000,
@@ -57,7 +72,7 @@ void main() {
       });
       expect(n.title, 'X');
       expect(n.country, 'LKA');
-      expect(n.deadline, DateTime(2026, 11, 28, 14));
+      expect(n.deadline, DateTime(2027, 6, 30, 14));
       expect(n.requirements, ['a']);
       expect(n.currency, 'USD');
       expect(n.cpvCodes, ['72000000']);
@@ -84,7 +99,7 @@ void main() {
         ScanDraft(
           title: 'Hospital system',
           buyer: buyer,
-          deadline: deadline ?? DateTime(2026, 11, 28, 14),
+          deadline: deadline ?? DateTime(2027, 6, 30, 14),
           country: 'LKA',
           ocrText: ocr,
           minTurnover: 150000000,
@@ -145,16 +160,68 @@ void main() {
       await photo.writeAsBytes([1, 2, 3]);
     });
 
-    ProviderContainer container({TextOcr? ocrImpl, NoticeReader? reader}) {
+    ProviderContainer container({
+      TextOcr? ocrImpl,
+      NoticeReader? reader,
+      bool cacheFails = false,
+      bool watch = true,
+      AiModel? model,
+      VerdictCache? verdicts,
+    }) {
+      final db = AppDatabase(NativeDatabase.memory());
+      addTearDown(db.close);
       final c = ProviderContainer(
         overrides: [
           textOcrProvider.overrideWithValue(ocrImpl ?? FakeOcr(ocr)),
           noticeReaderProvider.overrideWithValue(reader ?? FakeReader()),
+          tenderCacheProvider.overrideWithValue(
+            cacheFails ? FailingCache(db) : TenderCache(db),
+          ),
+          // No Firebase in tests: the cloud copy fails, and so does the AI
+          // unless a fake model is given.
+          if (model == null)
+            bidAgentProvider.overrideWith((ref) => throw StateError('no AI'))
+          else
+            bidAgentProvider.overrideWithValue(BidAgent(model: model)),
+          if (verdicts != null)
+            verdictCacheProvider.overrideWithValue(verdicts),
+          currentCompanyProvider.overrideWith(
+            (ref) => Stream.value(
+              const Company(
+                id: 'c',
+                name: 'Small firm',
+                country: 'LKA',
+                annualTurnover: 100000000,
+                currency: 'LKR',
+                teamSize: 5,
+                ownerUid: 'u',
+              ),
+            ),
+          ),
+          currentProfileProvider.overrideWith(
+            (ref) => Stream.value(
+              const CompanyProfile(
+                companyId: 'c',
+                cpvCodes: [],
+                countries: ['LKA'],
+              ),
+            ),
+          ),
         ],
       );
       addTearDown(c.dispose);
+      // The Scan page watches it; without a listener it is disposed.
+      if (watch) c.listen(scanViewModelProvider, (_, _) {});
       return c;
     }
+
+    ScanDraft typed({String title = 'Hospital system'}) => ScanDraft(
+      title: title,
+      buyer: 'Ministry of Health',
+      deadline: DateTime(2027, 6, 30, 14),
+      country: 'LKA',
+      ocrText: ocr,
+    );
 
     test('OCR then AI gives a review with the fields filled', () async {
       final c = container();
@@ -181,5 +248,113 @@ void main() {
       final s = c.read(scanViewModelProvider) as ScanFailed;
       expect(s.message, contains('good light'));
     });
+
+    test(
+      'a draft with problems stays on the form with what was typed',
+      () async {
+        final c = container();
+        final vm = c.read(scanViewModelProvider.notifier);
+        await vm.process(photo.path);
+        await vm.save(typed(title: ' '));
+        final s = c.read(scanViewModelProvider) as ScanReview;
+        expect(s.error, 'Add a title.');
+        expect(s.draft!.buyer, 'Ministry of Health');
+        expect(s.ocrText, ocr);
+      },
+    );
+
+    test('a failed local save goes back to the form, not a spinner', () async {
+      final c = container(cacheFails: true);
+      final vm = c.read(scanViewModelProvider.notifier);
+      await vm.process(photo.path);
+      await vm.save(typed());
+      final s = c.read(scanViewModelProvider) as ScanReview;
+      expect(s.error, contains('Could not save'));
+      expect(s.draft!.title, 'Hospital system');
+      expect(s.ocrText, ocr);
+    });
+
+    test('leaving the page drops a scan that was still being read', () async {
+      final c = container(watch: false);
+      final page = c.listen(scanViewModelProvider, (_, _) {});
+      final reading = c
+          .read(scanViewModelProvider.notifier)
+          .process(photo.path);
+      page.close(); // the user goes back
+      await reading;
+      await pumpEventQueue();
+      expect(c.read(scanViewModelProvider), isA<ScanIdle>());
+    });
+
+    test('leaving during the save finishes it, then starts fresh', () async {
+      final c = container(watch: false);
+      final page = c.listen(scanViewModelProvider, (_, _) {});
+      final vm = c.read(scanViewModelProvider.notifier);
+      await vm.process(photo.path);
+      final saving = vm.save(typed());
+      page.close(); // the user goes back while it saves
+      await saving;
+      await pumpEventQueue();
+      final id = typed().toTender(DateTime(2026)).id;
+      expect(await c.read(tenderCacheProvider).byId(id), isNotNull);
+      expect(c.read(scanViewModelProvider), isA<ScanIdle>());
+    });
+
+    test('once saved, a failed AI call still opens the tender', () async {
+      final c = container();
+      // The rules pass for this company, so the AI is asked, and fails.
+      c.listen(currentCompanyProvider, (_, _) {});
+      c.listen(currentProfileProvider, (_, _) {});
+      await c.read(currentCompanyProvider.future);
+      await c.read(currentProfileProvider.future);
+      final vm = c.read(scanViewModelProvider.notifier);
+      await vm.process(photo.path);
+      await vm.save(typed());
+      final s = c.read(scanViewModelProvider) as ScanSaved;
+      expect(s.tenderId, typed().toTender(DateTime(2026)).id);
+    });
+
+    test(
+      'a scanned verdict is stored with the profile it was made with',
+      () async {
+        final db = AppDatabase(NativeDatabase.memory());
+        addTearDown(db.close);
+        final verdicts = VerdictCache(db);
+        final c = container(model: AnsweringModel(), verdicts: verdicts);
+        c.listen(currentCompanyProvider, (_, _) {});
+        c.listen(currentProfileProvider, (_, _) {});
+        final company = await c.read(currentCompanyProvider.future);
+        final profile = await c.read(currentProfileProvider.future);
+        final vm = c.read(scanViewModelProvider.notifier);
+        await vm.process(photo.path);
+        await vm.save(typed());
+
+        final tender = typed().toTender(DateTime(2026));
+        final e = await verdicts.entry('c', tender.id);
+        expect(e, isNotNull);
+        // Without it, the next sync would judge the tender again.
+        expect(e!.profileHash, ProfileFingerprint.of(company!, profile!));
+      },
+    );
   });
+}
+
+/// Answers every tender with a NO_BID, with no criteria to check.
+class AnsweringModel implements AiModel {
+  @override
+  String get modelName => 'answering';
+
+  @override
+  Future<AiVerdictPayload> judgeTender({
+    required Company company,
+    required CompanyProfile profile,
+    required Tender tender,
+    List<String> rejectedQuotes = const [],
+  }) async => const AiVerdictPayload(
+    verdict: VerdictKind.noBid,
+    fitScore: 20,
+    confidence: 0.9,
+    criteria: [],
+    missingDocs: [],
+  );
 }

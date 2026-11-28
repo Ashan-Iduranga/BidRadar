@@ -87,3 +87,7 @@ final notifierProvider = Provider<NotificationService>(
 final bidRepositoryProvider = Provider<BidRepository>(
   (ref) => FirestoreBidRepository(ref.watch(firestoreProvider)),
 );
+
+final sharedRecordsProvider = Provider<SharedRecords>(
+  (ref) => FirestoreSharedRecords(ref.watch(firestoreProvider)),
+);

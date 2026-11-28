@@ -4,6 +4,7 @@ import 'package:firebase_ai/firebase_ai.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../data/models/models.dart';
+import '../agent/gemini_factory.dart';
 import '../agent/gemini_model.dart';
 
 enum SuggestionKind {
@@ -90,10 +91,10 @@ final Schema profileSuggestionsSchema = Schema.object(
 );
 
 class GeminiProfileAdvisor implements ProfileAdvisor {
-  GeminiProfileAdvisor({GenerativeModel? model})
+  GeminiProfileAdvisor({GeminiClient? client})
     : _model =
-          model ??
-          FirebaseAI.googleAI().generativeModel(
+          client ??
+          GeminiFactory.create(
             model: GeminiModel.defaultModel,
             generationConfig: GenerationConfig(
               responseMimeType: 'application/json',
@@ -102,7 +103,7 @@ class GeminiProfileAdvisor implements ProfileAdvisor {
             ),
           );
 
-  final GenerativeModel _model;
+  final GeminiClient _model;
 
   static String buildPrompt(
     Company company,

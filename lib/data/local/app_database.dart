@@ -49,6 +49,15 @@ class CachedVerdicts extends Table {
   DateTimeColumn get at => dateTime()();
   TextColumn get json => text()();
 
+  /// Notice-specific AI failures in a row for this notice text (malformed
+  /// or blocked answers). The sync stops retrying the notice after a few.
+  IntColumn get failures => integer().withDefault(const Constant(0))();
+
+  /// Fingerprint of the company profile the verdict was made with (see
+  /// `ProfileFingerprint`). Null for verdicts from before schema version 5
+  /// and from callers that do not pass one; those count as out of date.
+  TextColumn get profileHash => text().nullable()();
+
   @override
   Set<Column<Object>> get primaryKey => {companyId, tenderId};
 }
@@ -67,14 +76,25 @@ class AppDatabase extends _$AppDatabase {
       );
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
     onCreate: (m) => m.createAll(),
     onUpgrade: (m, from, to) async {
       if (from < 2) await m.createTable(syncRuns);
-      if (from < 3) await m.createTable(cachedVerdicts);
+      // createTable uses the current columns, so later columns are only
+      // added to tables that already existed. Existing rows are kept.
+      if (from < 3) {
+        await m.createTable(cachedVerdicts);
+      } else {
+        if (from < 4) {
+          await m.addColumn(cachedVerdicts, cachedVerdicts.failures);
+        }
+        if (from < 5) {
+          await m.addColumn(cachedVerdicts, cachedVerdicts.profileHash);
+        }
+      }
     },
   );
 }
@@ -210,12 +230,51 @@ class TenderCache {
         seenHashes[t.textHash] = t.id;
         await _db.into(_db.cachedTenders).insertOnConflictUpdate(_companion(t));
       }
+      // After every row is written, so a re-fetched original cannot undo it.
+      for (final d in duplicates) {
+        final refreshed = await _takeLaterDeadline(d);
+        if (refreshed != null) updated.add(refreshed);
+      }
       return CacheWriteResult(
         added: added,
         updated: updated,
         duplicates: duplicates,
       );
     });
+  }
+
+  /// A change notice (TED publishes one under a new number, usually with
+  /// the same text) is a duplicate by text, but may move the deadline. When
+  /// [dup] has the same source and buyer as its stored twin and a later
+  /// deadline, the twin takes that deadline and the newer links. The later
+  /// deadline is the one still open, for an extension or a new round.
+  Future<Tender?> _takeLaterDeadline(Tender dup) async {
+    final newDeadline = dup.deadline;
+    if (newDeadline == null) return null;
+    final row =
+        await (_db.select(_db.cachedTenders)
+              ..where((r) => r.textHash.equals(dup.textHash))
+              ..limit(1))
+            .getSingleOrNull();
+    if (row == null) return null;
+    final twin = _decode(row);
+    if (twin.id == dup.id ||
+        twin.source != dup.source ||
+        twin.buyer != dup.buyer) {
+      return null;
+    }
+    final old = twin.deadline;
+    if (old != null && !newDeadline.isAfter(old)) return null;
+    final merged = Tender.fromJson({
+      ...twin.toJson(),
+      'deadline': newDeadline.toUtc().toIso8601String(),
+      'url': dup.url,
+      'documentUrls': dup.documentUrls,
+    });
+    await _db
+        .into(_db.cachedTenders)
+        .insertOnConflictUpdate(_companion(merged));
+    return merged;
   }
 
   /// Cached tenders, soonest deadline first; unknown deadlines last.
@@ -260,12 +319,45 @@ class TenderCache {
       Tender.fromJson(jsonDecode(row.json) as Map<String, dynamic>);
 }
 
+/// One cached verdict with the facts the sync needs to decide on reuse.
+class CachedVerdictEntry {
+  const CachedVerdictEntry({
+    required this.verdict,
+    required this.textHash,
+    required this.failures,
+    this.profileHash,
+  });
+
+  final Verdict verdict;
+
+  /// Hash of the notice text the verdict was made on.
+  final String textHash;
+
+  /// Notice-specific AI failures in a row (see [CachedVerdicts.failures]).
+  final int failures;
+
+  /// Fingerprint of the profile the verdict was made with, if known.
+  final String? profileHash;
+
+  /// The AI gave no usable answer, so the sync may try again.
+  bool get failed => verdict.status == VerdictStatus.aiUnavailable;
+}
+
 /// Local store of the latest AI verdict per tender.
 class VerdictCache {
   VerdictCache(this._db);
   final AppDatabase _db;
 
-  Future<void> put(Verdict v, {required String textHash}) => _db
+  /// Stores [v] as the latest verdict. [failures] counts notice-specific AI
+  /// failures in a row; leave it at 0 for an answer or a manual run.
+  /// [profileHash] is the `ProfileFingerprint` the verdict was made with;
+  /// without it the sync treats the verdict as out of date.
+  Future<void> put(
+    Verdict v, {
+    required String textHash,
+    int failures = 0,
+    String? profileHash,
+  }) => _db
       .into(_db.cachedVerdicts)
       .insertOnConflictUpdate(
         CachedVerdictsCompanion.insert(
@@ -274,21 +366,40 @@ class VerdictCache {
           textHash: textHash,
           at: v.at.toUtc(),
           json: jsonEncode(v.toJson()),
+          failures: Value(failures),
+          profileHash: Value(profileHash),
         ),
       );
 
-  /// A verdict that can be reused for [tender]: same notice text, and not a
-  /// failed AI call (those are retried on the next sync).
-  Future<Verdict?> reusable(String companyId, Tender tender) async {
+  /// The cached verdict for a tender, whatever its notice text.
+  Future<CachedVerdictEntry?> entry(String companyId, String tenderId) async {
     final row =
         await (_db.select(_db.cachedVerdicts)..where(
               (r) =>
-                  r.companyId.equals(companyId) & r.tenderId.equals(tender.id),
+                  r.companyId.equals(companyId) & r.tenderId.equals(tenderId),
             ))
             .getSingleOrNull();
-    if (row == null || row.textHash != tender.textHash) return null;
-    final v = _decode(row);
-    return v.status == VerdictStatus.aiUnavailable ? null : v;
+    if (row == null) return null;
+    return CachedVerdictEntry(
+      verdict: _decode(row),
+      textHash: row.textHash,
+      failures: row.failures,
+      profileHash: row.profileHash,
+    );
+  }
+
+  /// A verdict that can be reused for [tender]: same notice text, not a
+  /// failed AI call (those are retried on a later sync), and, when
+  /// [profileHash] is given, made with that profile.
+  Future<Verdict?> reusable(
+    String companyId,
+    Tender tender, {
+    String? profileHash,
+  }) async {
+    final e = await entry(companyId, tender.id);
+    if (e == null || e.textHash != tender.textHash || e.failed) return null;
+    if (profileHash != null && e.profileHash != profileHash) return null;
+    return e.verdict;
   }
 
   /// tenderId → latest verdict, for the feed.

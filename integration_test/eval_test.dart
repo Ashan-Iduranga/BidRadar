@@ -34,6 +34,7 @@ class _FirstThenReal implements AiModel {
     required Company company,
     required CompanyProfile profile,
     required Tender tender,
+    List<String> rejectedQuotes = const [],
   }) {
     final f = _first;
     if (f != null) {
@@ -44,6 +45,7 @@ class _FirstThenReal implements AiModel {
       company: company,
       profile: profile,
       tender: tender,
+      rejectedQuotes: rejectedQuotes,
     );
   }
 }

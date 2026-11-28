@@ -257,27 +257,40 @@ class _DayCell extends StatelessWidget {
                 ? Border.all(color: b.action, width: 2)
                 : null,
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                '${date.day}',
-                style: TextStyle(
-                  color: selected ? b.surface : b.ink,
-                  fontWeight: count > 0 ? FontWeight.w800 : FontWeight.w500,
+          // The cell is a fixed square, about 38 dp on a small phone. At
+          // large text sizes the number and its dot shrink to fit instead
+          // of overflowing.
+          child: Padding(
+            padding: const EdgeInsets.all(2),
+            child: Center(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${date.day}',
+                      style: TextStyle(
+                        color: selected ? b.surface : b.ink,
+                        fontWeight: count > 0
+                            ? FontWeight.w800
+                            : FontWeight.w500,
+                      ),
+                    ),
+                    if (count > 0)
+                      Container(
+                        width: 6,
+                        height: 6,
+                        margin: const EdgeInsets.only(top: 2),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: selected ? b.surface : b.action,
+                        ),
+                      ),
+                  ],
                 ),
               ),
-              if (count > 0)
-                Container(
-                  width: 6,
-                  height: 6,
-                  margin: const EdgeInsets.only(top: 2),
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: selected ? b.surface : b.action,
-                  ),
-                ),
-            ],
+            ),
           ),
         ),
       ),

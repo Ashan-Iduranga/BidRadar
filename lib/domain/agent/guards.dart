@@ -33,8 +33,26 @@ class VerdictGuards {
         reason: 'AI confidence is low (${(confidence * 100).round()}%).',
       );
     }
+    if (aiVerdict == VerdictKind.noBid) {
+      // 3. A NO_BID hides the tender, so it needs quoted evidence too: at
+      // least one requirement the firm does not meet.
+      if (criteria.isEmpty) {
+        return (
+          verdict: VerdictKind.review,
+          reason: 'The AI said NO_BID without quoting any evidence.',
+        );
+      }
+      if (!criteria.any((c) => c.met == CriterionMet.no)) {
+        return (
+          verdict: VerdictKind.review,
+          reason:
+              'The AI said NO_BID but marked no requirement as not met, '
+              'so a person should decide.',
+        );
+      }
+    }
     if (aiVerdict == VerdictKind.bid) {
-      // 3. A BID must be consistent with its own evidence.
+      // 4. A BID must be consistent with its own evidence.
       if (criteria.isEmpty) {
         return (
           verdict: VerdictKind.review,
@@ -50,13 +68,23 @@ class VerdictGuards {
               'as not met.',
         );
       }
+      // BID only if every hard requirement is met with evidence.
+      final unknown = criteria.where((c) => c.met == CriterionMet.unknown);
+      if (unknown.isNotEmpty) {
+        return (
+          verdict: VerdictKind.review,
+          reason:
+              'Your profile does not show whether you meet '
+              '"${unknown.first.criterion}".',
+        );
+      }
       if (fitScore < minBidScore) {
         return (
           verdict: VerdictKind.review,
           reason: 'Fit score $fitScore is too low for a BID.',
         );
       }
-      // 4. Facts the rules could not check need a human look.
+      // 5. Facts the rules could not check need a human look.
       if (rules.warnings.isNotEmpty) {
         return (verdict: VerdictKind.review, reason: rules.warnings.first);
       }

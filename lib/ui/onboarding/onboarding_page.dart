@@ -1,4 +1,5 @@
-import 'package:firebase_auth/firebase_auth.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +9,7 @@ import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
 import '../../data/seed/sample_companies.dart';
+import '../auth/auth_providers.dart';
 import '../widgets/app_header.dart';
 import '../widgets/country_picker.dart';
 import '../widgets/state_views.dart';
@@ -32,8 +34,25 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
   bool _busy = false;
   bool _submitted = false;
 
+  /// Coming back from the email app after tapping the link: check again
+  /// without asking, so the Join button appears by itself.
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onResume: _recheckOnResume);
+  }
+
+  void _recheckOnResume() {
+    final data = ref.read(onboardingViewModelProvider).value;
+    if (data == null || data.invite == null || data.emailVerified) return;
+    unawaited(ref.read(onboardingViewModelProvider.notifier).confirmVerified());
+  }
+
   @override
   void dispose() {
+    _lifecycle.dispose();
     _name.dispose();
     _turnover.dispose();
     _team.dispose();
@@ -48,6 +67,35 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (error != null) {
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text(error)));
+    }
+  }
+
+  Future<void> _decline(Invite invite) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (c) => AlertDialog(
+        title: Text('Decline the invite from ${invite.companyName}?'),
+        content: const Text(
+          'The invite is deleted. The owner can send a new one later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(c, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('Decline'),
+          ),
+        ],
+      ),
+    );
+    if (ok ?? false) {
+      await _run(
+        () => ref
+            .read(onboardingViewModelProvider.notifier)
+            .declineInvite(invite),
+      );
     }
   }
 
@@ -77,14 +125,17 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
           showAvatar: false,
           actions: [
             TextButton(
-              onPressed: _busy ? null : () => FirebaseAuth.instance.signOut(),
+              onPressed: _busy
+                  ? null
+                  : () => ref.read(authServiceProvider).signOut(),
               child: const Text('Sign out'),
             ),
           ],
         ),
+        // Keep the last data on screen while the invite listener updates.
         body: switch (data) {
-          AsyncData(:final value) => _body(context, value),
-          AsyncValue(:final error?) when !data.hasValue => ErrorState(
+          AsyncValue(:final value?) => _body(context, value),
+          AsyncValue(:final error?) => ErrorState(
             message: 'Could not load setup: $error',
             onRetry: () => ref.invalidate(onboardingViewModelProvider),
           ),
@@ -105,8 +156,16 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
             _InviteCard(
               invite: invite,
               busy: _busy,
+              verified: data.emailVerified,
+              email: ref.watch(authStateProvider).value?.email,
               onJoin: () => _run(() => vm.acceptInvite(invite)),
+              onDecline: () => _decline(invite),
+              onVerified: () => _run(vm.confirmVerified),
+              onResend: () => _run(vm.resendVerification),
             ),
+            const SizedBox(height: Space.xl),
+          ] else ...[
+            _WaitingForInvite(email: ref.watch(authStateProvider).value?.email),
             const SizedBox(height: Space.xl),
           ],
           Text('Create a company', style: theme.textTheme.titleMedium),
@@ -247,16 +306,57 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 double? parseAmount(String? s) =>
     double.tryParse((s ?? '').replaceAll(RegExp(r'[,\s]'), ''));
 
+/// Shown when there is no invite yet: it appears here by itself.
+class _WaitingForInvite extends StatelessWidget {
+  const _WaitingForInvite({required this.email});
+
+  final String? email;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(Icons.group_add_outlined, color: theme.colorScheme.primary),
+        const SizedBox(width: Space.sm),
+        Expanded(
+          child: Text(
+            'Joining a team? Ask the owner to invite '
+            '${email ?? 'your email address'}. The invite shows up here '
+            'as soon as it is sent.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The invite, with Join and Decline. Until the email is verified it asks
+/// for that instead, with "I have verified" and Resend.
 class _InviteCard extends StatelessWidget {
   const _InviteCard({
     required this.invite,
     required this.busy,
+    required this.verified,
+    required this.email,
     required this.onJoin,
+    required this.onDecline,
+    required this.onVerified,
+    required this.onResend,
   });
 
   final Invite invite;
   final bool busy;
+  final bool verified;
+  final String? email;
   final VoidCallback onJoin;
+  final VoidCallback onDecline;
+  final VoidCallback onVerified;
+  final VoidCallback onResend;
 
   @override
   Widget build(BuildContext context) {
@@ -275,15 +375,38 @@ class _InviteCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: Space.sm),
-            Text(
-              'Join ${invite.companyName} as a bid manager. You can review '
-              'tenders and manage bids; the owner approves them.',
-            ),
-            const SizedBox(height: Space.lg),
-            FilledButton(
-              onPressed: busy ? null : onJoin,
-              child: Text('Join ${invite.companyName}'),
-            ),
+            if (verified) ...[
+              Text(
+                'Join ${invite.companyName} as a bid manager. You can review '
+                'tenders and manage bids; the owner approves them.',
+              ),
+              const SizedBox(height: Space.lg),
+              FilledButton(
+                onPressed: busy ? null : onJoin,
+                child: Text('Join ${invite.companyName}'),
+              ),
+              const SizedBox(height: Space.sm),
+              OutlinedButton(
+                onPressed: busy ? null : onDecline,
+                child: const Text('Decline'),
+              ),
+            ] else ...[
+              Text(
+                'Verify your email to join ${invite.companyName}. We sent a '
+                'link to ${email ?? 'your email address'}. Open it, then '
+                'come back here.',
+              ),
+              const SizedBox(height: Space.lg),
+              FilledButton(
+                onPressed: busy ? null : onVerified,
+                child: const Text('I have verified'),
+              ),
+              const SizedBox(height: Space.sm),
+              TextButton(
+                onPressed: busy ? null : onResend,
+                child: const Text('Resend email'),
+              ),
+            ],
           ],
         ),
       ),

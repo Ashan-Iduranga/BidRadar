@@ -1,4 +1,3 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -8,6 +7,7 @@ import '../../core/geo/countries.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/theme/tokens.dart';
 import '../../data/models/models.dart';
+import '../auth/auth_providers.dart';
 import '../onboarding/onboarding_page.dart' show parseAmount;
 import '../session/session_providers.dart';
 import '../widgets/app_header.dart';
@@ -211,7 +211,7 @@ class _ProfileBody extends ConsumerWidget {
         ),
         const SizedBox(height: Space.xl),
         OutlinedButton.icon(
-          onPressed: () => FirebaseAuth.instance.signOut(),
+          onPressed: () => ref.read(authServiceProvider).signOut(),
           icon: const Icon(Icons.logout),
           label: const Text('Sign out'),
         ),
@@ -404,11 +404,9 @@ class _CompanySheetState extends ConsumerState<_CompanySheet> {
         );
     if (!mounted) return;
     setState(() => _saving = false);
-    if (err == null) {
-      Navigator.pop(context);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
-    }
+    final messenger = ScaffoldMessenger.of(context);
+    if (err == null || err == kSavedOnPhone) Navigator.pop(context);
+    if (err != null) messenger.showSnackBar(SnackBar(content: Text(err)));
   }
 
   @override
@@ -636,13 +634,18 @@ class _TeamList extends ConsumerWidget {
                   context: context,
                   builder: (_) => _InviteDialog(
                     send: vm.invite,
-                    onSent: (email) => messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Invite saved. $email can now sign up and join.',
+                    onSent: (email, {required queued}) =>
+                        messenger.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              queued
+                                  ? 'Invite saved on this phone. It is sent '
+                                        'when you are back online.'
+                                  : 'Invite saved. $email can now sign up '
+                                        'and join.',
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
                   ),
                 );
               },
@@ -656,7 +659,7 @@ class _TeamList extends ConsumerWidget {
 class _InviteDialog extends StatefulWidget {
   const _InviteDialog({required this.send, required this.onSent});
   final Future<String?> Function(String) send;
-  final ValueChanged<String> onSent;
+  final void Function(String email, {required bool queued}) onSent;
 
   @override
   State<_InviteDialog> createState() => _InviteDialogState();
@@ -678,9 +681,10 @@ class _InviteDialogState extends State<_InviteDialog> {
     final email = _c.text.trim();
     final e = await widget.send(email);
     if (!mounted) return;
-    if (e == null) {
+    // Saved on the phone while offline counts as sent: Firestore sends it.
+    if (e == null || e == kSavedOnPhone) {
       Navigator.pop(context);
-      widget.onSent(email);
+      widget.onSent(email, queued: e != null);
     } else {
       setState(() {
         _busy = false;

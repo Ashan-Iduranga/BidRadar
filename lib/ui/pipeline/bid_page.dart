@@ -94,7 +94,12 @@ class _BidBody extends ConsumerWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: TextButton.icon(
-            onPressed: () => context.push(Routes.tender(bid.tenderId)),
+            // A tender scanned on the other phone is fetched first.
+            onPressed: () async {
+              await actions.loadTender(bid);
+              if (!context.mounted) return;
+              await context.push(Routes.tender(bid.tenderId));
+            },
             icon: const Icon(Icons.description_outlined),
             label: const Text('Open tender'),
           ),

@@ -8,7 +8,9 @@ final Schema bidVerdictSchema = Schema.object(
   properties: {
     'verdict': Schema.enumString(
       enumValues: ['BID', 'NO_BID', 'REVIEW'],
-      description: 'BID only if every hard requirement is met with evidence.',
+      description:
+          'BID only if every hard requirement is met with evidence; '
+          'NO_BID only with a quoted criterion marked "no".',
     ),
     'fitScore': Schema.integer(
       description: 'How well the tender fits the company, 0 to 100.',
